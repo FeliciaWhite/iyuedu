@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/menu_enable_selection"
+        android:title="@string/enable" />
+
+    <item
+        android:id="@+id/menu_disable_selection"
+        android:title="@string/disable" />
+
+    <item
+        android:id="@+id/menu_top_sel"
+        android:title="@string/to_top" />
+
+    <item
+        android:id="@+id/menu_bottom_sel"
+        android:title="@string/to_bottom" />
+
+    <item
+        android:id="@+id/menu_export_selection"
+        android:title="@string/export" />
+
+</menu>

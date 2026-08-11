@@ -1,0 +1,22 @@
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="66dp"
+    android:layout_height="66dp">
+
+    <!-- 彩光旋转圈 -->
+    <ImageView
+        android:id="@+id/ivGlowRing"
+        android:layout_width="66dp"
+        android:layout_height="66dp"
+        android:layout_gravity="center"
+        android:src="@drawable/read_aloud_glow_ring"
+        android:visibility="visible" />
+
+    <!-- 圆形封面 -->
+    <io.legado.app.ui.widget.image.CircleImageView
+        android:id="@+id/ivCover"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center"
+        android:src="@drawable/image_float_cover_default" />
+
+</FrameLayout>

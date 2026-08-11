@@ -1,0 +1,352 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <io.legado.app.lib.prefs.PreferenceCategory
+        android:title="@string/aloud_config"
+        app:allowDividerAbove="false"
+        app:allowDividerBelow="false"
+        app:iconSpaceReserved="false">
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:key="ignoreAudioFocus"
+            android:summary="@string/ignore_audio_focus_summary"
+            android:title="@string/ignore_audio_focus_title" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:key="pauseReadAloudWhilePhoneCalls"
+            android:summary="@string/pause_read_aloud_while_phone_calls_summary"
+            android:title="@string/pause_read_aloud_while_phone_calls_title" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:title="@string/read_aloud_wake_lock"
+            android:summary="@string/read_aloud_wake_lock_summary"
+            android:key="readAloudWakeLock"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:title="@string/read_aloud_float_window"
+            android:summary="@string/read_aloud_float_window_summary"
+            android:key="readAloudFloatWindow"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:title="@string/read_aloud_float_click_swap"
+            android:summary="@string/read_aloud_float_click_swap_summary"
+            android:key="readAloudFloatClickSwap"
+            android:dependency="readAloudFloatWindow"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.EditTextPreference
+            android:defaultValue="0"
+            android:title="@string/read_aloud_float_edge_offset"
+            android:summary="@string/read_aloud_float_edge_offset_summary"
+            android:key="readAloudFloatEdgeOffset"
+            android:dependency="readAloudFloatWindow"
+            android:inputType="numberSigned"
+            android:maxLines="1"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:title="@string/read_aloud_back_to_background"
+            android:summary="@string/read_aloud_back_to_background_summary"
+            android:key="readAloudBackToBackground"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:title="@string/system_media_control_compatibility_change"
+            android:summary="@string/system_media_control_compatibility_change_summary"
+            android:key="systemMediaControlCompatibilityChange"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:title="@string/pref_media_button_per_next"
+            android:summary="@string/pref_media_button_per_next_summary"
+            android:key="mediaButtonPerNext"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:title="@string/read_aloud_by_page"
+            android:summary="@string/read_aloud_by_page_summary"
+            android:key="readAloudByPage"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:title="@string/read_aloud_start_from_first"
+            android:summary="@string/read_aloud_start_from_first_summary"
+            android:key="readAloudStartFromFirst"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:title="@string/stream_read_aloud_audio"
+            android:summary="@string/stream_read_aloud_audio_summary"
+            android:key="streamReadAloudAudio"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.EditTextPreference
+            android:key="sysTtsPackageName"
+            android:title="手动指定引擎包名"
+            android:summary="当系统无法枚举到TTS引擎时，手动输入包名"
+            android:defaultValue=""
+            android:inputType="text"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:key="gengxinRealtimeUpdate"
+            android:title="@string/gengxin_keep_ahead"
+            android:summary="@string/gengxin_keep_ahead_summary"
+            android:defaultValue="false"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.EditTextPreference
+            android:key="sysTtsSynthesizeTimeout"
+            android:title="@string/sys_tts_synthesize_timeout"
+            android:summary="@string/sys_tts_synthesize_timeout_summary"
+            android:defaultValue="120"
+            android:inputType="number"
+            android:maxLines="1"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.EditTextPreference
+            android:key="ttsRetryCount"
+            android:title="@string/tts_retry_count"
+            android:summary="@string/tts_retry_count_summary"
+            android:defaultValue="3"
+            android:inputType="number"
+            android:maxLines="1"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:key="ttsRetrySkipOnFail"
+            android:title="@string/tts_retry_skip_on_fail"
+            android:summary="@string/tts_retry_skip_on_fail_summary"
+            android:defaultValue="true"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.Preference
+            android:title="@string/speak_engine"
+            android:summary="TTS"
+            android:key="appTtsEngine"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.Preference
+            android:title="@string/sys_tts_config"
+            android:summary="@string/sys_tts_config_summary"
+            android:key="sysTtsConfig"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.EditTextPreference
+            android:key="audioPreDownloadNum"
+            android:title="听书预加载数量(章节)"
+            android:summary="设置听书时预先下载的章节数量"
+            android:defaultValue="1"
+            android:inputType="number"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.EditTextPreference
+            android:key="audioCacheCleanTime"
+            android:title="音频缓存保留时间(分钟)，输入 0 为退出即刻清理"
+            android:summary="听书缓存文件保留多久后自动删除，输入 0 代表退出即刻清理"
+            android:defaultValue="1"
+            android:inputType="number"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:title="@string/convert_cache_to_wav"
+            android:summary="@string/convert_cache_to_wav_summary"
+            android:key="convertCacheToWav"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.EditTextPreference
+            android:defaultValue="1.0"
+            android:title="@string/convert_cache_to_wav_gain"
+            android:summary="@string/convert_cache_to_wav_gain_summary"
+            android:dialogMessage="@string/convert_cache_to_wav_gain_dialog_message"
+            android:key="convertCacheToWavGain"
+            android:dependency="convertCacheToWav"
+            android:inputType="numberDecimal"
+            android:maxLines="1"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:title="@string/auto_merge_audio_on_chapter_end"
+            android:summary="@string/auto_merge_audio_on_chapter_end_summary"
+            android:key="autoMergeAudioOnChapterEnd"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:title="@string/convert_to_mp3_after_merge"
+            android:summary="@string/convert_to_mp3_after_merge_summary"
+            android:key="convertToMp3AfterMerge"
+            android:dependency="autoMergeAudioOnChapterEnd"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:title="@string/mix_sound_effect_on_merge"
+            android:summary="@string/mix_sound_effect_on_merge_summary"
+            android:key="mixSoundEffectOnMerge"
+            android:dependency="autoMergeAudioOnChapterEnd"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:title="@string/save_text_with_merge"
+            android:summary="@string/save_text_with_merge_summary"
+            android:key="saveTextWithMerge"
+            android:dependency="autoMergeAudioOnChapterEnd"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:title="@string/save_video_with_merge"
+            android:summary="@string/save_video_with_merge_summary"
+            android:key="saveVideoWithMerge"
+            android:dependency="autoMergeAudioOnChapterEnd"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.Preference
+            android:defaultValue="1.0"
+            android:title="@string/video_subtitle_style"
+            android:summary="@string/video_subtitle_style_summary"
+            android:key="videoSubtitleStyle"
+            android:dependency="saveVideoWithMerge"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.EditTextPreference
+            android:defaultValue="0"
+            android:title="@string/video_subtitle_v_offset"
+            android:summary="@string/video_subtitle_v_offset_summary"
+            android:key="videoSubtitleVOffset"
+            android:dependency="saveVideoWithMerge"
+            android:inputType="numberSigned|numberDecimal"
+            android:maxLines="1"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:title="@string/video_subtitle_split"
+            android:summary="@string/video_subtitle_split_summary"
+            android:key="videoSubtitleSplit"
+            android:dependency="saveVideoWithMerge"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.EditTextPreference
+            android:defaultValue="0.3"
+            android:title="@string/short_audio_min_duration"
+            android:summary="@string/short_audio_min_duration_summary"
+            android:key="shortAudioMinDuration"
+            android:inputType="numberDecimal"
+            android:maxLines="1"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.EditTextPreference
+            android:defaultValue="15"
+            android:title="@string/srt_subtitle_max_chars"
+            android:summary="@string/srt_subtitle_max_chars_summary"
+            android:key="srtSubtitleMaxChars"
+            android:dependency="saveTextWithMerge"
+            android:inputType="number"
+            android:maxLines="1"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.EditTextPreference
+            android:defaultValue="0"
+            android:title="@string/srt_subtitle_time_offset"
+            android:summary="@string/srt_subtitle_time_offset_summary"
+            android:key="srtSubtitleTimeOffset"
+            android:dependency="saveTextWithMerge"
+            android:inputType="numberSigned|numberDecimal"
+            android:maxLines="1"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.EditTextPreference
+            android:defaultValue="0.5"
+            android:title="@string/srt_silence_match_range"
+            android:summary="@string/srt_silence_match_range_summary"
+            android:key="srtSilenceMatchRange"
+            android:dependency="saveTextWithMerge"
+            android:inputType="numberDecimal"
+            android:maxLines="1"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="true"
+            android:title="@string/show_read_aloud_cover_subtitle"
+            android:summary="@string/show_read_aloud_cover_subtitle_summary"
+            android:key="showReadAloudCoverSubtitle"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.EditTextPreference
+            android:defaultValue="240"
+            android:title="@string/read_aloud_cover_width"
+            android:summary="@string/read_aloud_cover_width_summary"
+            android:key="readAloudCoverWidth"
+            android:inputType="number"
+            android:maxLines="1"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:title="@string/read_aloud_cover_marquee"
+            android:summary="@string/read_aloud_cover_marquee_summary"
+            android:key="readAloudCoverMarqueeEnabled"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.EditTextPreference
+            android:defaultValue="3000"
+            android:title="@string/read_aloud_cover_marquee_speed"
+            android:summary="@string/read_aloud_cover_marquee_speed_summary"
+            android:key="readAloudCoverMarqueeSpeed"
+            android:inputType="number"
+            android:maxLines="1"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="true"
+            android:title="@string/marquee_bgm_link"
+            android:summary="@string/marquee_bgm_link_summary"
+            android:key="marqueeBgmLinkEnabled"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:title="@string/show_role_annotation"
+            android:summary="@string/show_role_annotation_summary"
+            android:key="showRoleAnnotation"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.EditTextPreference
+            android:defaultValue="0"
+            android:title="@string/role_annotation_offset"
+            android:summary="@string/role_annotation_offset_summary"
+            android:key="roleAnnotationOffset"
+            android:dependency="showRoleAnnotation"
+            android:inputType="numberSigned"
+            android:maxLines="1"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:title="@string/show_audio_cache_indicator"
+            android:summary="@string/show_audio_cache_indicator_summary"
+            android:key="showAudioCacheIndicator"
+            app:iconSpaceReserved="false" />
+
+    </io.legado.app.lib.prefs.PreferenceCategory>
+
+</androidx.preference.PreferenceScreen>

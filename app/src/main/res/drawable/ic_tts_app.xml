@@ -1,0 +1,16 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+  <!-- 应用图标 - 模拟 Android 应用图标 -->
+  <path
+      android:fillColor="#181818"
+      android:pathData="M213.33,85.33h597.34A42.67,42.67 0,0 1,853.33 128v768a42.67,42.67 0,0 1,-42.67 42.67H213.33A42.67,42.67 0,0 1,170.67 896V128A42.67,42.67 0,0 1,213.33 85.33z"/>
+  <path
+      android:fillColor="#FFFFFF"
+      android:pathData="M256,128h512a42.67,42.67 0,0 1,42.67 42.67v597.33a42.67,42.67 0,0 1,-42.67 42.67H256a42.67,42.67 0,0 1,-42.67 -42.67V170.67A42.67,42.67 0,0 1,256 128z"/>
+  <path
+      android:fillColor="#181818"
+      android:pathData="M298.67,384h426.67v256H298.67z"/>
+</vector>

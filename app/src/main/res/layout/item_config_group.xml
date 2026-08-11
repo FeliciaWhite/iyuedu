@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/ll_group_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="?android:attr/selectableItemBackground"
+    android:padding="8dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <!-- 展开/收起箭头 -->
+        <ImageView
+            android:id="@+id/iv_expand"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:padding="2dp"
+            android:src="@drawable/ic_expand_more"
+            app:tint="@color/primaryText" />
+
+        <!-- 分组名称和数量 -->
+        <TextView
+            android:id="@+id/tv_group_name"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:textColor="@color/primaryText"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <!-- 分组三态复选框（全部启用/部分启用/全部禁用） -->
+        <com.google.android.material.checkbox.MaterialCheckBox
+            android:id="@+id/cb_group_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:padding="4dp"
+            android:clickable="false"
+            android:focusable="false" />
+
+        <!-- 分组更多选项 -->
+        <ImageView
+            android:id="@+id/iv_group_more"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:padding="4dp"
+            android:src="@drawable/ic_more_vert"
+            app:tint="@color/primaryText" />
+    </LinearLayout>
+
+</LinearLayout>

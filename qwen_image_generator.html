@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Qwen-Image 2.0 Pro 文生图</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  background: #f0f2f5;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+.container {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  padding: 32px;
+  max-width: 560px;
+  width: 100%;
+}
+h1 {
+  font-size: 22px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 8px;
+}
+.subtitle {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 24px;
+}
+.form-group { margin-bottom: 16px; }
+label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 6px;
+}
+textarea, select, input[type="number"] {
+  width: 100%;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color .2s;
+  outline: none;
+}
+textarea:focus, select:focus, input[type="number"]:focus { border-color: #4f7cff; }
+textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+.row { display: flex; gap: 12px; }
+.row > * { flex: 1; }
+.switch-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0;
+}
+.switch {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  flex-shrink: 0;
+}
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: #ccc;
+  border-radius: 22px;
+  transition: .3s;
+}
+.slider::before {
+  content: "";
+  position: absolute;
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: .3s;
+}
+.switch input:checked + .slider { background: #4f7cff; }
+.switch input:checked + .slider::before { transform: translateX(18px); }
+.switch-label {
+  font-size: 14px;
+  color: #333;
+  cursor: pointer;
+}
+.advanced-toggle {
+  background: none;
+  border: none;
+  color: #4f7cff;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px 0;
+  margin-bottom: 12px;
+}
+.advanced-toggle:hover { color: #3a66e0; }
+.advanced-panel {
+  display: none;
+  padding: 16px;
+  background: #f9f9fb;
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+.advanced-panel.show { display: block; }
+.btn-generate {
+  width: 100%;
+  padding: 12px;
+  background: #4f7cff;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .2s;
+  margin-top: 4px;
+}
+.btn-generate:hover { background: #3a66e0; }
+.btn-generate:disabled {
+  background: #a0b4e6;
+  cursor: not-allowed;
+}
+.status {
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  display: none;
+}
+.status.info { display: block; background: #e8f4fd; color: #1a5c8c; }
+.status.error { display: block; background: #fde8e8; color: #8c1a1a; }
+.status.success { display: block; background: #e8fde8; color: #1a6b1a; }
+.result {
+  margin-top: 20px;
+  display: none;
+}
+.result.show { display: block; }
+.result img {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #eee;
+}
+.result-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #666;
+}
+.download-btn {
+  background: #e8f4fd;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: #1a5c8c;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+.progress-bar {
+  width: 100%;
+  height: 4px;
+  background: #eee;
+  border-radius: 4px;
+  margin-top: 12px;
+  overflow: hidden;
+  display: none;
+}
+.progress-bar.show { display: block; }
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #4f7cff, #7b9cff);
+  border-radius: 4px;
+  transition: width .5s;
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🎨 Qwen-Image 2.0 Pro</h1>
+  <div class="subtitle">通过魔搭社区 Gradio API 生成图片</div>
+
+  <div class="form-group">
+    <label for="prompt">提示词</label>
+    <textarea id="prompt" placeholder="输入图片描述，如：冬日北京的都市街景，青灰瓦顶、朱红色外墙的两间相邻中式商铺比肩而立..."></textarea>
+  </div>
+
+  <div class="form-group switch-group">
+    <label class="switch">
+      <input type="checkbox" id="promptExtend" checked>
+      <span class="slider"></span>
+    </label>
+    <span class="switch-label" onclick="document.getElementById('promptExtend').click()">启用提示词扩展</span>
+  </div>
+
+  <button class="advanced-toggle" onclick="toggleAdvanced()">高级设置 ▼</button>
+  <div class="advanced-panel" id="advancedPanel">
+    <div class="row">
+      <div class="form-group">
+        <label for="width">宽度</label>
+        <select id="width">
+          <option value="1024">1024</option>
+          <option value="1344">1344</option>
+          <option value="1536" selected>1536</option>
+          <option value="2688">2688</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="height">高度</label>
+        <select id="height">
+          <option value="768">768</option>
+          <option value="1024" selected>1024</option>
+          <option value="1344">1344</option>
+          <option value="1536">1536</option>
+          <option value="2688">2688</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="seed">随机种子（0 = 随机）</label>
+      <input type="number" id="seed" value="0" min="0">
+    </div>
+  </div>
+
+  <button class="btn-generate" id="generateBtn" onclick="generate()">✨ 生成图片</button>
+
+  <div class="progress-bar" id="progressBar">
+    <div class="progress-fill" id="progressFill"></div>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <div class="result" id="result">
+    <img id="resultImg" alt="生成结果">
+    <div class="result-meta">
+      <span id="resultMeta"></span>
+      <a id="downloadLink" class="download-btn" download="qwen_image.png">⬇ 保存图片</a>
+    </div>
+  </div>
+</div>
+
+<script>
+// ========== 配置 ==========
+const API_BASE = 'https://qwen-qwen-image-2-0-pro.ms.show';
+const API_SUBMIT = API_BASE + '/gradio_api/call/generate_image';
+// ==========================
+
+const $ = id => document.getElementById(id);
+const statusEl = $('status');
+const resultEl = $('result');
+const progressBar = $('progressBar');
+const progressFill = $('progressFill');
+const btn = $('generateBtn');
+
+function toggleAdvanced() {
+  const panel = $('advancedPanel');
+  panel.classList.toggle('show');
+}
+
+function setStatus(msg, type) {
+  statusEl.className = 'status ' + type;
+  statusEl.textContent = msg;
+}
+
+function setProgress(pct) {
+  progressBar.classList.add('show');
+  progressFill.style.width = pct + '%';
+  if (pct >= 100) setTimeout(() => { progressBar.classList.remove('show'); progressFill.style.width = '0%'; }, 1000);
+}
+
+function showResult(imageUrl, seed, w, h) {
+  resultEl.classList.add('show');
+  $('resultImg').src = imageUrl;
+  const meta = '种子: ' + seed + ' · 分辨率: ' + w + '×' + h;
+  $('resultMeta').textContent = meta;
+  $('downloadLink').href = imageUrl;
+  // 尝试以提示词命名
+  const prompt = $('prompt').value.trim().slice(0, 20) || 'qwen_image';
+  $('downloadLink').download = prompt + '.png';
+}
+
+async function generate() {
+  const prompt = $('prompt').value.trim();
+  if (!prompt) {
+    setStatus('请输入提示词', 'error');
+    return;
+  }
+
+  // 禁用按钮，显示状态
+  btn.disabled = true;
+  btn.textContent = '⏳ 生成中...';
+  resultEl.classList.remove('show');
+  setStatus('正在提交生成任务...', 'info');
+  setProgress(10);
+
+  const promptExtend = $('promptExtend').checked;
+  const width = parseInt($('width').value);
+  const height = parseInt($('height').value);
+  const seed = parseInt($('seed').value);
+
+  try {
+    // 步骤1：提交任务
+    const submitResp = await fetch(API_SUBMIT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: [[], prompt, promptExtend, false, seed, seed === 0, width, height, " "]
+      })
+    });
+
+    if (!submitResp.ok) {
+      throw new Error('提交失败，HTTP ' + submitResp.status);
+    }
+
+    const submitData = await submitResp.json();
+    const eventId = submitData.event_id;
+    setStatus('任务已提交，正在生成图片...', 'info');
+    setProgress(30);
+
+    // 步骤2：轮询等待结果（最多60秒）
+    const maxAttempts = 20;
+    let lastImageUrl = null;
+    let lastSeed = seed;
+    let foundComplete = false;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      await new Promise(r => setTimeout(r, 3000));
+
+      const pollResp = await fetch(API_BASE + '/gradio_api/call/generate_image/' + eventId);
+      const text = await pollResp.text();
+
+      // 解析 SSE 事件
+      const lines = text.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (line.startsWith('event: complete')) {
+          foundComplete = true;
+        }
+        if (line.startsWith('data: ')) {
+          const dataStr = line.substring(6);
+          if (dataStr === '[, null, null]') continue;
+          try {
+            const data = JSON.parse(dataStr);
+            if (Array.isArray(data) && data[0] && data[0].url) {
+              lastImageUrl = data[0].url;
+              if (data[1] && data[1] !== 0) lastSeed = data[1];
+            }
+          } catch(e) {}
+        }
+      }
+
+      if (foundComplete) break;
+
+      const pct = 30 + Math.min(60, (attempt / maxAttempts) * 60);
+      setProgress(pct);
+      setStatus('生成中... (' + attempt + '/' + maxAttempts + ')', 'info');
+    }
+
+    if (!lastImageUrl) {
+      throw new Error('未能获取到生成结果，请重试');
+    }
+
+    setProgress(100);
+    setStatus('✅ 生成完成！', 'success');
+    showResult(lastImageUrl, lastSeed, width, height);
+
+  } catch (err) {
+    setStatus('❌ ' + err.message, 'error');
+    setProgress(0);
+    setTimeout(() => progressBar.classList.remove('show'), 2000);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✨ 生成图片';
+  }
+}
+
+// 常用示例点击填充
+const examples = [
+  '冬日北京的都市街景，青灰瓦顶、朱红色外墙的两间相邻中式商铺比肩而立',
+  '中国古典水墨长卷风格，竖幅构图，行书题写柳永《雨霖铃》',
+  '一位约七十岁的欧美男性，灰白短发，浅蓝色眼睛深邃有神',
+  '为杨幂设计一个时尚海报封面',
+  '一张深蓝色渐变背景的幻灯片，标题是"Qwen-Image发展历程"'
+];
+
+// 在提示框下方添加示例快速填充
+const promptGroup = $('prompt').parentElement;
+const exampleDiv = document.createElement('div');
+exampleDiv.style.cssText = 'margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px;';
+examples.forEach(text => {
+  const chip = document.createElement('span');
+  chip.textContent = text.length > 18 ? text.slice(0, 18) + '...' : text;
+  chip.style.cssText = 'padding: 4px 10px; background: #f0f2f5; border-radius: 14px; font-size: 12px; color: #666; cursor: pointer; transition: .2s; white-space: nowrap;';
+  chip.title = text;
+  chip.onmouseenter = () => chip.style.background = '#e0e4ea';
+  chip.onmouseleave = () => chip.style.background = '#f0f2f5';
+  chip.onclick = () => { $('prompt').value = text; };
+  exampleDiv.appendChild(chip);
+});
+promptGroup.appendChild(exampleDiv);
+</script>
+</body>
+</html>

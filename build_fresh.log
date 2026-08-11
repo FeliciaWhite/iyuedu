@@ -1,0 +1,159 @@
+nohup: ignoring input
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :modules:book:preBuild UP-TO-DATE
+> Task :modules:rhino:preBuild UP-TO-DATE
+> Task :app:preBuild UP-TO-DATE
+> Task :modules:book:preReleaseBuild UP-TO-DATE
+> Task :modules:rhino:preReleaseBuild UP-TO-DATE
+> Task :app:preAppReleaseBuild UP-TO-DATE
+> Task :modules:book:mergeReleaseJniLibFolders
+> Task :app:mergeAppReleaseJniLibFolders
+> Task :modules:rhino:mergeReleaseJniLibFolders
+> Task :modules:book:mergeReleaseNativeLibs NO-SOURCE
+> Task :modules:rhino:mergeReleaseNativeLibs NO-SOURCE
+> Task :modules:rhino:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:book:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:rhino:copyReleaseJniLibsProjectOnly
+> Task :modules:book:copyReleaseJniLibsProjectOnly
+> Task :modules:book:generateReleaseResources FROM-CACHE
+> Task :modules:rhino:generateReleaseResources FROM-CACHE
+> Task :app:buildKotlinToolingMetadata
+> Task :modules:rhino:packageReleaseResources FROM-CACHE
+> Task :modules:book:packageReleaseResources FROM-CACHE
+> Task :modules:book:processReleaseNavigationResources FROM-CACHE
+> Task :modules:rhino:processReleaseNavigationResources FROM-CACHE
+> Task :modules:rhino:parseReleaseLocalResources FROM-CACHE
+> Task :modules:book:parseReleaseLocalResources FROM-CACHE
+> Task :modules:book:generateReleaseRFile FROM-CACHE
+> Task :modules:rhino:generateReleaseRFile FROM-CACHE
+> Task :modules:book:compileReleaseKotlin NO-SOURCE
+> Task :modules:book:javaPreCompileRelease FROM-CACHE
+> Task :modules:book:compileReleaseJavaWithJavac FROM-CACHE
+> Task :modules:book:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :modules:book:exportReleaseConsumerProguardFiles
+> Task :modules:book:extractDeepLinksRelease FROM-CACHE
+> Task :modules:book:writeReleaseAarMetadata
+> Task :modules:book:processReleaseManifest FROM-CACHE
+> Task :modules:book:prepareReleaseArtProfile UP-TO-DATE
+> Task :modules:rhino:compileReleaseKotlin FROM-CACHE
+> Task :modules:rhino:javaPreCompileRelease FROM-CACHE
+> Task :modules:rhino:compileReleaseJavaWithJavac NO-SOURCE
+> Task :modules:rhino:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :modules:rhino:exportReleaseConsumerProguardFiles
+> Task :modules:rhino:writeReleaseAarMetadata
+> Task :modules:rhino:extractDeepLinksRelease FROM-CACHE
+> Task :modules:rhino:processReleaseManifest FROM-CACHE
+> Task :modules:rhino:prepareReleaseArtProfile UP-TO-DATE
+> Task :modules:rhino:bundleLibRuntimeToJarRelease
+> Task :modules:rhino:processReleaseJavaRes
+> Task :modules:rhino:generateReleaseAssets UP-TO-DATE
+> Task :modules:rhino:bundleLibCompileToJarRelease
+> Task :modules:book:bundleLibRuntimeToJarRelease
+> Task :modules:book:bundleLibCompileToJarRelease
+> Task :modules:rhino:mergeReleaseAssets
+> Task :modules:book:processReleaseJavaRes
+> Task :modules:book:generateReleaseAssets UP-TO-DATE
+> Task :modules:book:mergeReleaseAssets
+> Task :modules:rhino:createFullJarRelease
+> Task :modules:rhino:extractProguardFiles
+> Task :modules:book:createFullJarRelease
+> Task :modules:book:extractProguardFiles
+> Task :modules:book:generateReleaseLintModel
+> Task :modules:book:prepareLintJarForPublish UP-TO-DATE
+> Task :modules:book:checkReleaseAarMetadata
+> Task :modules:book:stripReleaseDebugSymbols NO-SOURCE
+> Task :modules:book:copyReleaseJniLibsProjectAndLocalJars
+> Task :modules:book:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :modules:rhino:generateReleaseLintModel
+> Task :modules:rhino:prepareLintJarForPublish UP-TO-DATE
+> Task :modules:rhino:stripReleaseDebugSymbols NO-SOURCE
+> Task :modules:rhino:checkReleaseAarMetadata
+> Task :modules:rhino:copyReleaseJniLibsProjectAndLocalJars
+> Task :modules:rhino:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :modules:book:extractReleaseAnnotations FROM-CACHE
+> Task :modules:book:mergeReleaseConsumerProguardFiles
+> Task :modules:rhino:extractReleaseAnnotations FROM-CACHE
+> Task :modules:rhino:mergeReleaseConsumerProguardFiles
+> Task :app:mergeAppReleaseNativeLibs
+> Task :modules:book:lintVitalAnalyzeRelease FROM-CACHE
+> Task :modules:book:writeReleaseLintModelMetadata
+> Task :modules:rhino:lintVitalAnalyzeRelease FROM-CACHE
+> Task :modules:rhino:writeReleaseLintModelMetadata
+> Task :modules:book:generateReleaseLintVitalModel
+> Task :modules:rhino:generateReleaseLintVitalModel
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:rhino:mergeReleaseJavaResource
+> Task :modules:book:mergeReleaseJavaResource
+> Task :modules:rhino:syncReleaseLibJars FROM-CACHE
+> Task :modules:book:syncReleaseLibJars FROM-CACHE
+> Task :modules:rhino:bundleReleaseLocalLintAar
+> Task :modules:book:bundleReleaseLocalLintAar
+
+> Task :app:stripAppReleaseDebugSymbols
+Unable to strip the following libraries, packaging them as they are: libarchive-jni.so, libimage_processing_util_jni.so, librenderscript-toolkit.so, librtmp-jni.so, libsurface_util_jni.so. Run with --info option to learn more.
+
+> Task :app:dataBindingMergeDependencyArtifactsAppRelease
+> Task :app:extractAppReleaseNativeSymbolTables FROM-CACHE
+> Task :app:mergeAppReleaseNativeDebugMetadata NO-SOURCE
+> Task :app:generateAppReleaseResources FROM-CACHE
+> Task :app:processAppReleaseGoogleServices FROM-CACHE
+> Task :app:checkAppReleaseDuplicateClasses
+> Task :app:mergeAppReleaseResources FROM-CACHE
+> Task :app:packageAppReleaseResources FROM-CACHE
+> Task :app:processAppReleaseNavigationResources FROM-CACHE
+> Task :app:parseAppReleaseLocalResources FROM-CACHE
+> Task :app:dataBindingGenBaseClassesAppRelease FROM-CACHE
+> Task :app:generateAppReleaseBuildConfig FROM-CACHE
+> Task :app:compileAppReleaseNavigationResources FROM-CACHE
+> Task :app:mapAppReleaseSourceSetPaths
+> Task :app:createAppReleaseCompatibleScreenManifests
+> Task :app:extractDeepLinksAppRelease FROM-CACHE
+> Task :app:checkAppReleaseAarMetadata
+> Task :app:processAppReleaseMainManifest FROM-CACHE
+> Task :app:processAppReleaseManifest FROM-CACHE
+> Task :app:processAppReleaseManifestForPackage FROM-CACHE
+> Task :app:processAppReleaseResources FROM-CACHE
+> Task :app:kspAppReleaseKotlin FROM-CACHE
+> Task :app:compileAppReleaseKotlin FROM-CACHE
+> Task :app:javaPreCompileAppRelease FROM-CACHE
+> Task :app:compileAppReleaseJavaWithJavac FROM-CACHE
+> Task :app:extractProguardFiles
+> Task :app:mergeAppReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :app:mergeAppReleaseArtProfile
+> Task :app:processAppReleaseJavaRes
+> Task :app:expandAppReleaseArtProfileWildcards FROM-CACHE
+> Task :app:mergeAppReleaseStartupProfile UP-TO-DATE
+> Task :app:copyRoomSchemas NO-SOURCE
+> Task :app:generateAppReleaseAssets UP-TO-DATE
+> Task :app:mergeAppReleaseAssets
+> Task :app:compressAppReleaseAssets FROM-CACHE
+> Task :app:extractAppReleaseVersionControlInfo
+> Task :app:generateAppReleaseLintVitalReportModel
+> Task :app:lintVitalAnalyzeAppRelease FROM-CACHE
+> Task :app:collectAppReleaseDependencies
+> Task :app:sdkAppReleaseDependencyData
+> Task :app:validateSigningAppRelease
+> Task :app:writeAppReleaseAppMetadata
+> Task :app:writeAppReleaseSigningConfigVersions
+> Task :app:mergeAppReleaseJavaResource
+> Task :app:lintVitalReportAppRelease
+> Task :app:minifyAppReleaseWithR8 FROM-CACHE
+> Task :app:compileAppReleaseArtProfile FROM-CACHE
+> Task :app:lintVitalAppRelease
+> Task :app:convertShrunkResourcesToBinaryAppRelease FROM-CACHE
+> Task :app:optimizeAppReleaseResources FROM-CACHE
+> Task :app:packageAppRelease
+> Task :app:createAppReleaseApkListingFileRedirect
+> Task :app:assembleAppRelease
+
+[Incubating] Problems report is available at: file:///workspace/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 16s
+121 actionable tasks: 61 executed, 50 from cache, 10 up-to-date

@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root_layout"
+    android:layout_width="match_parent"
+    android:layout_height="400dp"
+    android:orientation="vertical"
+    android:background="@color/background_menu"
+    android:padding="16dp">
+
+    <!-- 顶部按钮区域 -->
+    <LinearLayout
+        android:id="@+id/content_layout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- 第一行：密钥管理 -->
+        <LinearLayout
+            android:id="@+id/ll_key_management"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="12dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="密钥管理"
+                android:textColor="@color/primaryText"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="8dp"/>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btn_save_key"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="5dp"
+                    android:text="保存密钥"
+                    android:backgroundTint="#4CAF50"
+                    android:textColor="@android:color/white"/>
+
+                <Button
+                    android:id="@+id/btn_restore_key"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="5dp"
+                    android:text="恢复密钥"
+                    android:backgroundTint="#FF9800"
+                    android:textColor="@android:color/white"/>
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- 分隔线 -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#888888"
+            android:layout_marginVertical="8dp"/>
+
+        <!-- 第二行：按钮组 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp">
+
+            <Button
+                android:id="@+id/btn_add_character"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="3dp"
+                android:text="新增角色"
+                android:backgroundTint="#4CAF50"
+                android:textColor="@android:color/white"
+                android:textSize="12sp"/>
+
+            <Button
+                android:id="@+id/btn_create_book"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="3dp"
+                android:text="创建新书"
+                android:backgroundTint="#2196F3"
+                android:textColor="@android:color/white"
+                android:textSize="12sp"/>
+
+            <Button
+                android:id="@+id/btn_backup_restore"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="3dp"
+                android:text="备份恢复"
+                android:backgroundTint="#9C27B0"
+                android:textColor="@android:color/white"
+                android:textSize="12sp"/>
+
+            <Button
+                android:id="@+id/btn_manage_books"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="3dp"
+                android:text="管理书籍"
+                android:backgroundTint="#FF9800"
+                android:textColor="@android:color/white"
+                android:textSize="12sp"/>
+
+        </LinearLayout>
+
+        <!-- 第三行：操作按钮组 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp">
+
+            <Button
+                android:id="@+id/btn_merge"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="3dp"
+                android:text="执行合并"
+                android:backgroundTint="#4CAF50"
+                android:textColor="@android:color/white"
+                android:textSize="12sp"/>
+
+            <Button
+                android:id="@+id/btn_change_voice"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="3dp"
+                android:text="更换发音人"
+                android:backgroundTint="#9C27B0"
+                android:textColor="@android:color/white"
+                android:textSize="12sp"/>
+
+            <Button
+                android:id="@+id/btn_release"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="3dp"
+                android:text="释放角色"
+                android:backgroundTint="#2196F3"
+                android:textColor="@android:color/white"
+                android:textSize="12sp"/>
+
+            <Button
+                android:id="@+id/btn_delete_character"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="3dp"
+                android:text="删除角色"
+                android:backgroundTint="#F44336"
+                android:textColor="@android:color/white"
+                android:textSize="12sp"/>
+
+        </LinearLayout>
+
+        <!-- 第四行：书籍选择 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp">
+
+            <Spinner
+                android:id="@+id/spinner_book"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="2"
+                android:layout_marginEnd="5dp"/>
+
+            <Button
+                android:id="@+id/btn_refresh"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="5dp"
+                android:text="刷新"
+                android:backgroundTint="#607D8B"
+                android:textColor="@android:color/white"/>
+
+        </LinearLayout>
+
+        <!-- 角色列表标签 -->
+        <TextView
+            android:id="@+id/tv_character_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="角色列表 (单击标记/长按菜单):"
+            android:textColor="@color/primaryText"
+            android:textSize="14sp"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp"/>
+
+    </LinearLayout>
+
+    <!-- 角色列表 - 填满剩余空间 -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_characters"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="8dp"/>
+
+</LinearLayout>

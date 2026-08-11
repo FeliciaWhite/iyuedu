@@ -1,0 +1,15 @@
+.gradle/
+build/
+*.apk
+*.zip
+local.properties
+.idea/
+*.iml
+.DS_Store
+/node_modules
+/yilai/
+/角色管理修改文件/
+temp-xf50-clone/
+temp-xf35-source/
+build-release.log
+app/schemas/

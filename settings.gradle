@@ -1,0 +1,51 @@
+pluginManagement {
+    repositories {
+        // 镜像仓库优先
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+        maven { url 'https://maven.aliyun.com/repository/central' }
+        maven { url 'https://repo.huaweicloud.com/repository/maven/' }
+        
+        google()
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        // jitpack 放最前：com.github.* 优先从 jitpack 解析（Moriafly/CarGuo 等仅在 jitpack 上）；
+        // 若 jitpack 404，则回退到下方通用镜像（bumptech.glide、jenly1314 等实际在 Maven Central 上）。
+        maven {
+            url = 'https://jitpack.io'
+            content {
+                includeGroupByRegex("com\\.github.*")
+            }
+        }
+        //镜像仓库（作为 com.github.* 回退及非 GitHub 依赖的主源）
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        maven { url 'https://maven.aliyun.com/repository/central' }
+        maven { url 'https://repo.huaweicloud.com/repository/maven/' }
+        //maven { url "https://maven-central-asia.storage-download.googleapis.com/maven2/" }
+
+        google {
+            content {
+                includeGroupByRegex("com\\.android.*")
+                includeGroupByRegex("com\\.google.*")
+                includeGroupByRegex("androidx.*")
+                // Required for org.chromium.net:httpengine-native-provider
+                includeGroup("org.chromium.net")
+            }
+        }
+        //原仓库（备用）
+        mavenCentral()
+    }
+}
+rootProject.name = 'legado'
+
+include ':app'
+include ':modules:book'
+include ':modules:rhino'

@@ -1,0 +1,211 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :clean
+> Task :app:clean UP-TO-DATE
+> Task :modules:book:clean
+> Task :modules:rhino:clean
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preAppReleaseBuild UP-TO-DATE
+> Task :app:mergeAppReleaseJniLibFolders
+> Task :modules:book:preBuild UP-TO-DATE
+> Task :modules:book:preReleaseBuild UP-TO-DATE
+> Task :modules:book:mergeReleaseJniLibFolders
+> Task :modules:book:mergeReleaseNativeLibs NO-SOURCE
+> Task :modules:book:copyReleaseJniLibsProjectOnly
+> Task :modules:rhino:preBuild UP-TO-DATE
+> Task :modules:rhino:preReleaseBuild UP-TO-DATE
+> Task :modules:rhino:mergeReleaseJniLibFolders
+> Task :modules:rhino:mergeReleaseNativeLibs NO-SOURCE
+> Task :modules:rhino:copyReleaseJniLibsProjectOnly
+> Task :app:mergeAppReleaseNativeLibs
+
+> Task :app:stripAppReleaseDebugSymbols
+Unable to strip the following libraries, packaging them as they are: libarchive-jni.so, libimage_processing_util_jni.so, librenderscript-toolkit.so, librtmp-jni.so, libsurface_util_jni.so. Run with --info option to learn more.
+
+> Task :app:extractAppReleaseNativeSymbolTables
+> Task :app:mergeAppReleaseNativeDebugMetadata NO-SOURCE
+> Task :modules:book:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:book:generateReleaseResources
+> Task :modules:book:packageReleaseResources
+> Task :modules:book:processReleaseNavigationResources
+> Task :modules:book:parseReleaseLocalResources
+> Task :modules:book:generateReleaseRFile
+> Task :modules:book:compileReleaseKotlin NO-SOURCE
+> Task :modules:book:javaPreCompileRelease
+> Task :modules:book:compileReleaseJavaWithJavac
+> Task :modules:book:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :modules:book:exportReleaseConsumerProguardFiles
+> Task :modules:rhino:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:rhino:generateReleaseResources
+> Task :modules:rhino:packageReleaseResources
+> Task :modules:rhino:processReleaseNavigationResources
+> Task :modules:rhino:parseReleaseLocalResources
+> Task :modules:rhino:generateReleaseRFile
+> Task :modules:rhino:compileReleaseKotlin
+> Task :modules:rhino:javaPreCompileRelease
+> Task :modules:rhino:compileReleaseJavaWithJavac NO-SOURCE
+> Task :modules:rhino:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :modules:rhino:exportReleaseConsumerProguardFiles
+> Task :app:buildKotlinToolingMetadata
+> Task :app:checkAppReleaseDuplicateClasses
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:dataBindingMergeDependencyArtifactsAppRelease
+> Task :app:generateAppReleaseResources
+> Task :app:processAppReleaseGoogleServices
+> Task :app:mergeAppReleaseResources
+> Task :app:packageAppReleaseResources
+> Task :app:processAppReleaseNavigationResources
+> Task :app:parseAppReleaseLocalResources
+> Task :app:dataBindingGenBaseClassesAppRelease
+> Task :app:generateAppReleaseBuildConfig
+> Task :modules:book:writeReleaseAarMetadata
+> Task :modules:rhino:writeReleaseAarMetadata
+> Task :app:checkAppReleaseAarMetadata
+> Task :app:compileAppReleaseNavigationResources
+> Task :app:mapAppReleaseSourceSetPaths
+> Task :app:createAppReleaseCompatibleScreenManifests
+> Task :app:extractDeepLinksAppRelease
+> Task :modules:book:extractDeepLinksRelease
+> Task :modules:book:processReleaseManifest
+> Task :modules:rhino:extractDeepLinksRelease
+> Task :modules:rhino:processReleaseManifest
+> Task :app:processAppReleaseMainManifest
+> Task :app:processAppReleaseManifest
+> Task :app:processAppReleaseManifestForPackage
+> Task :app:processAppReleaseResources
+> Task :modules:book:bundleLibCompileToJarRelease
+> Task :modules:rhino:bundleLibCompileToJarRelease
+> Task :app:kspAppReleaseKotlin
+> Task :app:compileAppReleaseKotlin
+w: file:///workspace/app/src/main/java/io/legado/app/App.kt:76:25 'static fun setThreadAssertsDisabledForTesting(disabled: Boolean): Unit' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/help/GlideImageGetter.kt:199:46 'val opacity: Int' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/help/JsExtensions.kt:285:41 Unchecked cast of 'Any?' to 'Map<String, Any>'.
+w: file:///workspace/app/src/main/java/io/legado/app/help/JsExtensions.kt:290:29 Unnecessary safe call on a non-null receiver of type 'Any'.
+w: file:///workspace/app/src/main/java/io/legado/app/help/config/ThemeConfig.kt:131:13 'when' is exhaustive so 'else' is redundant here.
+w: file:///workspace/app/src/main/java/io/legado/app/help/gsyVideo/BiliDanmukuParser.kt:236:33 Condition is always 'true'.
+w: file:///workspace/app/src/main/java/io/legado/app/help/tts/JsWebSocketConnection.kt:42:33 The corresponding parameter in the supertype 'WebSocketListener' is named 'webSocket'. This may cause problems when calling this function with named arguments.
+w: file:///workspace/app/src/main/java/io/legado/app/help/tts/JsWebSocketConnection.kt:47:36 The corresponding parameter in the supertype 'WebSocketListener' is named 'webSocket'. This may cause problems when calling this function with named arguments.
+w: file:///workspace/app/src/main/java/io/legado/app/help/tts/JsWebSocketConnection.kt:51:36 The corresponding parameter in the supertype 'WebSocketListener' is named 'webSocket'. This may cause problems when calling this function with named arguments.
+w: file:///workspace/app/src/main/java/io/legado/app/help/tts/JsWebSocketConnection.kt:55:36 The corresponding parameter in the supertype 'WebSocketListener' is named 'webSocket'. This may cause problems when calling this function with named arguments.
+w: file:///workspace/app/src/main/java/io/legado/app/help/tts/JsWebSocketConnection.kt:60:35 The corresponding parameter in the supertype 'WebSocketListener' is named 'webSocket'. This may cause problems when calling this function with named arguments.
+w: file:///workspace/app/src/main/java/io/legado/app/help/tts/JsWebSocketConnection.kt:65:36 The corresponding parameter in the supertype 'WebSocketListener' is named 'webSocket'. This may cause problems when calling this function with named arguments.
+w: file:///workspace/app/src/main/java/io/legado/app/help/tts/TtsWebSocketHelper.kt:178:43 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Throwable'.
+w: file:///workspace/app/src/main/java/io/legado/app/help/update/AppUpdateGitee.kt:40:28 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///workspace/app/src/main/java/io/legado/app/model/localBook/LocalBook.kt:257:33 Unnecessary safe call on a non-null receiver of type 'String'.
+w: file:///workspace/app/src/main/java/io/legado/app/service/AudioPlayService.kt:535:32 'static field FLAG_HANDLES_MEDIA_BUTTONS: Int' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/service/AudioPlayService.kt:536:40 'static field FLAG_HANDLES_TRANSPORT_CONTROLS: Int' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/service/BgmAIService.kt:165:41 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///workspace/app/src/main/java/io/legado/app/service/HttpReadAloudService.kt:981:43 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Throwable'.
+w: file:///workspace/app/src/main/java/io/legado/app/service/HttpReadAloudService.kt:1288:17 Condition is always 'true'.
+w: file:///workspace/app/src/main/java/io/legado/app/service/HttpTtsAudioCache.kt:73:47 Elvis operator (?:) always returns the left operand of non-nullable type 'String'.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:564:17 Condition is always 'true'.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:867:93 Redundant call of conversion method.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:908:76 Elvis operator (?:) always returns the left operand of non-nullable type 'String'.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:919:76 Elvis operator (?:) always returns the left operand of non-nullable type 'String'.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:933:72 Redundant call of conversion method.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:983:40 'fun toByte(): Byte' is deprecated. Conversion of Char to Number is deprecated. Use Char.code property instead.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:983:69 'fun toByte(): Byte' is deprecated. Conversion of Char to Number is deprecated. Use Char.code property instead.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:984:46 'fun toByte(): Byte' is deprecated. Conversion of Char to Number is deprecated. Use Char.code property instead.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:984:75 'fun toByte(): Byte' is deprecated. Conversion of Char to Number is deprecated. Use Char.code property instead.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:985:46 'fun toByte(): Byte' is deprecated. Conversion of Char to Number is deprecated. Use Char.code property instead.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:985:75 'fun toByte(): Byte' is deprecated. Conversion of Char to Number is deprecated. Use Char.code property instead.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:986:47 'fun toByte(): Byte' is deprecated. Conversion of Char to Number is deprecated. Use Char.code property instead.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:986:77 'fun toByte(): Byte' is deprecated. Conversion of Char to Number is deprecated. Use Char.code property instead.
+w: file:///workspace/app/src/main/java/io/legado/app/service/VideoPlayService.kt:196:36 'static field FLAG_HANDLES_MEDIA_BUTTONS: Int' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/service/VideoPlayService.kt:197:44 'static field FLAG_HANDLES_TRANSPORT_CONTROLS: Int' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/about/UpdateDialog.kt:62:25 Condition is always 'true'.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/CharacterManagerDialog.kt:10:8 'class PreferenceManager : Any' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/CharacterManagerDialog.kt:461:21 'class PreferenceManager : Any' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/CharacterManagerDialog.kt:461:39 'static fun getDefaultSharedPreferences(p0: Context!): SharedPreferences!' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/CharacterManagerDialog.kt:466:21 'class PreferenceManager : Any' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/CharacterManagerDialog.kt:466:39 'static fun getDefaultSharedPreferences(p0: Context!): SharedPreferences!' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/ConfigListDialog.kt:985:52 Unchecked cast of 'SpinnerAdapter!' to 'ArrayAdapter<String>'.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/ConfigListDialog.kt:1003:46 Unchecked cast of 'Any!' to 'List<ConfigListDialog.VoiceInfo>'.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/ConfigListDialog.kt:1145:32 Unchecked cast of 'Any!' to 'List<ConfigListDialog.VoiceInfo>'.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/SpeakEngineDialog.kt:241:32 This is a delicate API and its use requires care. Make sure you fully read and understand documentation of the declaration that is marked as a delicate API.
+w: file:///workspace/app/src/main/java/io/legado/app/utils/AudioConvertUtil.kt:161:64 Redundant call of conversion method.
+w: file:///workspace/app/src/main/java/io/legado/app/utils/AudioConvertUtil.kt:172:53 Redundant call of conversion method.
+
+> Task :app:javaPreCompileAppRelease
+> Task :app:compileAppReleaseJavaWithJavac
+> Task :modules:book:prepareReleaseArtProfile UP-TO-DATE
+> Task :modules:rhino:prepareReleaseArtProfile UP-TO-DATE
+> Task :app:mergeAppReleaseArtProfile
+> Task :modules:book:bundleLibRuntimeToJarRelease
+> Task :modules:rhino:bundleLibRuntimeToJarRelease
+> Task :app:expandAppReleaseArtProfileWildcards
+> Task :app:extractProguardFiles
+> Task :app:mergeAppReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :app:processAppReleaseJavaRes
+> Task :modules:book:processReleaseJavaRes
+> Task :modules:rhino:processReleaseJavaRes
+> Task :app:mergeAppReleaseJavaResource
+> Task :app:mergeAppReleaseStartupProfile UP-TO-DATE
+> Task :app:minifyAppReleaseWithR8
+> Task :app:compileAppReleaseArtProfile
+> Task :app:copyRoomSchemas NO-SOURCE
+> Task :app:generateAppReleaseAssets UP-TO-DATE
+> Task :modules:book:generateReleaseAssets UP-TO-DATE
+> Task :modules:book:mergeReleaseAssets
+> Task :modules:rhino:generateReleaseAssets UP-TO-DATE
+> Task :modules:rhino:mergeReleaseAssets
+> Task :app:mergeAppReleaseAssets
+> Task :app:compressAppReleaseAssets
+> Task :app:extractAppReleaseVersionControlInfo
+> Task :modules:book:createFullJarRelease
+> Task :modules:book:extractProguardFiles
+> Task :modules:book:generateReleaseLintModel
+> Task :modules:book:prepareLintJarForPublish UP-TO-DATE
+> Task :modules:rhino:createFullJarRelease
+> Task :modules:rhino:extractProguardFiles
+> Task :modules:rhino:generateReleaseLintModel
+> Task :modules:rhino:prepareLintJarForPublish UP-TO-DATE
+> Task :app:generateAppReleaseLintVitalReportModel
+> Task :modules:book:checkReleaseAarMetadata
+> Task :modules:book:stripReleaseDebugSymbols NO-SOURCE
+> Task :modules:book:copyReleaseJniLibsProjectAndLocalJars
+> Task :modules:book:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :modules:book:extractReleaseAnnotations
+> Task :modules:book:mergeReleaseConsumerProguardFiles
+> Task :modules:book:mergeReleaseJavaResource
+> Task :modules:book:syncReleaseLibJars
+> Task :modules:book:bundleReleaseLocalLintAar
+> Task :modules:rhino:checkReleaseAarMetadata
+> Task :modules:rhino:stripReleaseDebugSymbols NO-SOURCE
+> Task :modules:rhino:copyReleaseJniLibsProjectAndLocalJars
+> Task :modules:rhino:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :modules:rhino:extractReleaseAnnotations
+> Task :modules:rhino:mergeReleaseConsumerProguardFiles
+> Task :modules:rhino:mergeReleaseJavaResource
+> Task :modules:rhino:syncReleaseLibJars
+> Task :modules:rhino:bundleReleaseLocalLintAar
+> Task :modules:book:lintVitalAnalyzeRelease
+> Task :modules:book:writeReleaseLintModelMetadata
+> Task :modules:rhino:lintVitalAnalyzeRelease
+> Task :modules:rhino:writeReleaseLintModelMetadata
+> Task :app:lintVitalAnalyzeAppRelease
+> Task :modules:book:generateReleaseLintVitalModel
+> Task :modules:rhino:generateReleaseLintVitalModel
+> Task :app:lintVitalReportAppRelease
+> Task :app:lintVitalAppRelease
+> Task :app:convertShrunkResourcesToBinaryAppRelease
+> Task :app:optimizeAppReleaseResources
+> Task :app:collectAppReleaseDependencies
+> Task :app:sdkAppReleaseDependencyData
+> Task :app:validateSigningAppRelease
+> Task :app:writeAppReleaseAppMetadata
+> Task :app:writeAppReleaseSigningConfigVersions
+> Task :app:packageAppRelease
+> Task :app:createAppReleaseApkListingFileRedirect
+> Task :app:assembleAppRelease
+
+[Incubating] Problems report is available at: file:///workspace/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 4m 57s
+125 actionable tasks: 114 executed, 11 up-to-date

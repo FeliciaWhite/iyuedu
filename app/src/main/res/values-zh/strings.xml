@@ -1210,6 +1210,10 @@
     <string name="convert_cache_to_wav_gain_summary">转换缓存为WAV时对音量进行增益放大，默认1.0（不放大），最大3.0，超过3.0自动使用3.0</string>
     <string name="convert_cache_to_wav_gain_dialog_title">请输入音量增益倍数</string>
     <string name="convert_cache_to_wav_gain_dialog_message">范围 0.0 ~ 3.0，默认 1.0，超过 3.0 将自动设为 3.0</string>
+    <string name="read_aloud_volume_gain">播放音量增益</string>
+    <string name="read_aloud_volume_gain_summary">朗读播放时对音量进行增益放大，默认1.0（不放大），范围0.5~5.0，修改后实时生效。与"转换WAV音量增益"不同，此项不改变缓存文件，仅在播放时实时调整输出音量。</string>
+    <string name="read_aloud_volume_gain_dialog_title">请输入播放音量增益倍数</string>
+    <string name="read_aloud_volume_gain_dialog_message">范围 0.5 ~ 5.0，默认 1.0，超过 5.0 将自动设为 5.0</string>
     <string name="pause_read_aloud_while_phone_calls_title">来电期间暂停朗读</string>
     <string name="pause_read_aloud_while_phone_calls_summary">在通话期间暂停朗读，需要读取手机状态权限</string>
     <string name="read_aloud_read_phone_state_permission_rationale">阅读需要读取手机状态实现来电期间暂停朗读功能</string>

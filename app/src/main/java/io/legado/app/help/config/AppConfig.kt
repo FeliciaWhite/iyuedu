@@ -900,6 +900,15 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             ?.toFloatOrNull()?.coerceIn(0f, 3f) ?: 1.0f
         set(value) = appCtx.putPrefString(PreferKey.convertCacheToWavGain, value.toString())
 
+    // 朗读播放时的音量增益倍数（默认 1.0，范围 0.5~5.0，超过自动截断为 5.0）
+    var readAloudVolumeGain: Float
+        get() = appCtx.getPrefString(PreferKey.readAloudVolumeGain, "1.0")
+            ?.toFloatOrNull()?.coerceIn(0.5f, 5.0f) ?: 1.0f
+        set(value) = appCtx.putPrefString(
+            PreferKey.readAloudVolumeGain,
+            value.coerceIn(0.5f, 5.0f).toString()
+        )
+
     // 6.1 超短音频判定阈值（秒），设为0表示不限制
     // 注意：EditTextPreference 存储的是 String，不能用 getFloat/putFloat
     var shortAudioMinDuration: Float

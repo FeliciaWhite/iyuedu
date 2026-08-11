@@ -2,6 +2,7 @@ package io.legado.app.service
 
 import android.annotation.SuppressLint
 import android.app.PendingIntent
+import android.content.Context
 import android.net.Uri
 import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
@@ -19,6 +20,8 @@ import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.offline.DefaultDownloaderFactory
 import androidx.media3.exoplayer.offline.DownloadRequest
 import androidx.media3.exoplayer.offline.Downloader
@@ -42,6 +45,7 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.book.BookHelp
+import io.legado.app.help.audio.GainAudioProcessor
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.exoplayer.InputStreamDataSource
@@ -158,7 +162,27 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
         }
     }
 
-    private val exoPlayer: ExoPlayer by lazy { ExoPlayer.Builder(this).build() }
+    // 朗读播放音量增益处理器：注入 ExoPlayer 音频管线，解码后 PCM 上做乘性增益 + tanh 软限幅
+    private val gainAudioProcessor: GainAudioProcessor by lazy {
+        GainAudioProcessor(AppConfig.readAloudVolumeGain)
+    }
+
+    private val exoPlayer: ExoPlayer by lazy {
+        val renderersFactory = object : DefaultRenderersFactory(this) {
+            override fun buildAudioSink(
+                context: Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean
+            ): androidx.media3.exoplayer.audio.AudioSink? {
+                return DefaultAudioSink.Builder(this@HttpReadAloudService)
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .setAudioProcessors(arrayOf(gainAudioProcessor))
+                    .build()
+            }
+        }
+        ExoPlayer.Builder(this, renderersFactory).build()
+    }
 
     private val ttsFolderPath: String by lazy {
         val baseDir = externalFiles
@@ -422,6 +446,11 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                 TtsEngineActivator.activateFromHttpTts(httpTts)
             }
         }
+    }
+
+    // 朗读播放音量增益实时生效：由 BaseReadAloudService 事件监听触发
+    override fun updateVolumeGain(gain: Float) {
+        gainAudioProcessor.setGain(gain)
     }
 
     override fun playStop(affectBgm: Boolean) {

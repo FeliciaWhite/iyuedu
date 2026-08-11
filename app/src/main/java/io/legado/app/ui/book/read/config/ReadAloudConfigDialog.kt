@@ -192,6 +192,19 @@ class ReadAloudConfigDialog : BasePrefDialogFragment() {
                 }
             }
 
+            // "播放音量增益" - 修改后实时生效（通知正在朗读的服务调整增益）
+            findPreference<EditTextPreference>(PreferKey.readAloudVolumeGain)?.let { pref ->
+                val current = AppConfig.readAloudVolumeGain
+                pref.summary = "当前增益: ${current}x"
+                pref.setOnPreferenceChangeListener { _, newValue ->
+                    val gain = (newValue as String).toFloatOrNull()?.coerceIn(0.5f, 5.0f) ?: 1.0f
+                    AppConfig.readAloudVolumeGain = gain
+                    pref.summary = "当前增益: ${gain}x"
+                    postEvent(EventBus.READ_ALOUD_VOLUME_GAIN, gain)
+                    true
+                }
+            }
+
         }
 
         private fun bindSummaryToValue(key: String, defaultVal: String) {

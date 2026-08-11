@@ -40,6 +40,7 @@ object EventBus {
     const val READ_ALOUD_FADE_OUT = "readAloudFadeOut"
     const val READ_ALOUD_STARTING = "readAloudStarting"
     const val READ_ALOUD_AUDIO_CACHE_REFRESH = "readAloudAudioCacheRefresh"
+    const val READ_ALOUD_VOLUME_GAIN = "readAloudVolumeGain"
     const val EXPORT_BOOK = "exportBook"
     const val UP_MANGA_CONFIG = "upMangaConfig"
     const val PLAY_MODE_CHANGED = "playModeChanged"

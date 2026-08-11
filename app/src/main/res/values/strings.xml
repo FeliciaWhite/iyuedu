@@ -1284,6 +1284,10 @@
     <string name="convert_cache_to_wav_gain_summary">Apply volume gain when converting cache to WAV. Default 1.0 (no gain), max 3.0. Values above 3.0 are clamped to 3.0.</string>
     <string name="convert_cache_to_wav_gain_dialog_title">Enter volume gain</string>
     <string name="convert_cache_to_wav_gain_dialog_message">Range 0.0 ~ 3.0, default 1.0. Values above 3.0 will be clamped to 3.0.</string>
+    <string name="read_aloud_volume_gain">Playback volume gain</string>
+    <string name="read_aloud_volume_gain_summary">Apply volume gain during read-aloud playback. Default 1.0 (no gain), range 0.5~5.0, takes effect in real time. Unlike "WAV conversion volume gain", this does not modify cached files; it adjusts output volume at play time only.</string>
+    <string name="read_aloud_volume_gain_dialog_title">Enter playback volume gain</string>
+    <string name="read_aloud_volume_gain_dialog_message">Range 0.5 ~ 5.0, default 1.0. Values above 5.0 will be clamped to 5.0.</string>
     <string name="pause_read_aloud_while_phone_calls_title">来电期间暂停朗读</string>
     <string name="pause_read_aloud_while_phone_calls_summary">在通话期间暂停朗读，需要读取手机状态权限</string>
     <string name="read_aloud_read_phone_state_permission_rationale">阅读需要读取手机状态实现来电期间暂停朗读功能</string>

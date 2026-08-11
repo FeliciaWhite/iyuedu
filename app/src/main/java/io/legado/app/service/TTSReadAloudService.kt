@@ -1,6 +1,7 @@
 package io.legado.app.service
 
 import android.app.PendingIntent
+import android.content.Context
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Bundle
@@ -11,9 +12,12 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import io.legado.app.R
 import io.legado.app.constant.AppConst
+import io.legado.app.help.audio.GainAudioProcessor
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
 import io.legado.app.constant.EventBus
@@ -74,7 +78,27 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener,
     private var pendingPlay = false
 
     // ====== ExoPlayer & 播放（完全复制转发器模式）======
-    private val exoPlayer: ExoPlayer by lazy { ExoPlayer.Builder(this).build() }
+    // 朗读播放音量增益处理器：注入 ExoPlayer 音频管线，解码后 PCM 上做乘性增益 + tanh 软限幅
+    private val gainAudioProcessor: GainAudioProcessor by lazy {
+        GainAudioProcessor(AppConfig.readAloudVolumeGain)
+    }
+
+    private val exoPlayer: ExoPlayer by lazy {
+        val renderersFactory = object : DefaultRenderersFactory(this) {
+            override fun buildAudioSink(
+                context: Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean
+            ): androidx.media3.exoplayer.audio.AudioSink? {
+                return DefaultAudioSink.Builder(this@TTSReadAloudService)
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .setAudioProcessors(arrayOf(gainAudioProcessor))
+                    .build()
+            }
+        }
+        ExoPlayer.Builder(this, renderersFactory).build()
+    }
     private var playIndexJob: Job? = null
     private var playErrorNo = 0
 
@@ -477,6 +501,11 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener,
                 preloadNextChapter()
             }
         }
+    }
+
+    // 朗读播放音量增益实时生效：由 BaseReadAloudService 事件监听触发
+    override fun updateVolumeGain(gain: Float) {
+        gainAudioProcessor.setGain(gain)
     }
 
     override fun playStop(affectBgm: Boolean) {

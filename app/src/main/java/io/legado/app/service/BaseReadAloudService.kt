@@ -897,6 +897,10 @@ abstract class BaseReadAloudService : BaseService(),
             val startPos = it.getInt("startPos")
             newReadAloud(play, pageIndex, startPos)
         }
+        // 朗读播放音量增益实时生效：设置项修改后由设置页 postEvent 触发
+        observeEvent<Float>(EventBus.READ_ALOUD_VOLUME_GAIN) { gain ->
+            updateVolumeGain(gain)
+        }
         observeEvent<String>(EventBus.AI_IMAGE_REQUEST) { _ ->
             // 朗读对话框请求显示当前 AI 图片
             // 若首次生成已触发，只需通知UI显示已有图片，不重复启动生成
@@ -1074,10 +1078,21 @@ abstract class BaseReadAloudService : BaseService(),
 
     abstract fun playStop(affectBgm: Boolean = true)
 
+    /**
+     * 朗读播放音量增益实时更新。子类（Http/TTS 朗读服务）应 override 此方法，
+     * 将增益应用到各自 ExoPlayer 的 [io.legado.app.help.audio.GainAudioProcessor]。
+     * 默认空实现，避免基类被实例化时出错。
+     */
+    open fun updateVolumeGain(gain: Float) {
+        // 由子类实现
+    }
+
     @CallSuper
     open fun pauseReadAloud(abandonFocus: Boolean = true) {
         if (useWakeLock) {
             wakeLock.release()
+        }
+        if (useWifiLock) {
             wifiLock?.release()
         }
         pause = true

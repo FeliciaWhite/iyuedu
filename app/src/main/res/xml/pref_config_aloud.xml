@@ -180,6 +180,16 @@
             android:maxLines="1"
             app:iconSpaceReserved="false" />
 
+        <io.legado.app.lib.prefs.EditTextPreference
+            android:defaultValue="1.0"
+            android:title="@string/read_aloud_volume_gain"
+            android:summary="@string/read_aloud_volume_gain_summary"
+            android:dialogMessage="@string/read_aloud_volume_gain_dialog_message"
+            android:key="readAloudVolumeGain"
+            android:inputType="numberDecimal"
+            android:maxLines="1"
+            app:iconSpaceReserved="false" />
+
         <io.legado.app.lib.prefs.SwitchPreference
             android:defaultValue="false"
             android:title="@string/auto_merge_audio_on_chapter_end"

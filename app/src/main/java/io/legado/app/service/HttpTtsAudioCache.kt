@@ -180,6 +180,40 @@ object HttpTtsAudioCache {
     }
 
     /**
+     * 获取章节缓存音频与对应朗读文本的配对列表（按段落顺序，仅包含有缓存音频的段落）。
+     * 用于视频合成时保证「音频段」与「字幕文本段」严格一一对应：
+     * 若某段落合成失败（无缓存）或纯符号/无中英文数字（无静音缓存），该段不会进入列表，
+     * 音频与字幕同步跳过，避免二者按下标对齐时错位。
+     *
+     * @return List<Pair<音频文件, 朗读文本>>，与 audioFiles 等长的文本列表一一对应
+     */
+    fun getChapterAudioTextPairs(
+        book: Book,
+        chapter: BookChapter
+    ): List<Pair<File, String>> {
+        val pairs = mutableListOf<Pair<File, String>>()
+        val segments = getChapterSegments(book, chapter)
+        segments.forEachIndexed { index, text ->
+            val fileName = getFileName(chapter.title, text, index)
+            val speakText = text.replace(AppPattern.notReadAloudRegex, "")
+            val found = if (speakText.isEmpty()) {
+                // 全符号/空文本：查 HttpTTS 静音缓存
+                val httpFile = File("${ttsFolderPath}$fileName.mp3")
+                if (httpFile.exists() && httpFile.length() > 0) httpFile
+                else findSysTtsCacheFile(chapter.title, text, index)
+            } else {
+                val httpFile = File("${ttsFolderPath}$fileName.mp3")
+                if (httpFile.exists() && httpFile.length() > 0) httpFile
+                else findSysTtsCacheFile(chapter.title, text, index)
+            }
+            if (found != null && found.exists() && found.length() > 0) {
+                pairs.add(found to text)
+            }
+        }
+        return pairs
+    }
+
+    /**
      * 获取章节的朗读片段列表（与 HttpReadAloudService.preDownloadAudios 逻辑一致）
      */
     private fun getChapterSegments(book: Book, chapter: BookChapter): List<String> {
@@ -526,14 +560,22 @@ object HttpTtsAudioCache {
                     AppLog.put("保存视频: 本章没有已保存的AI图片，无法生成视频: ${chapter.title}")
                     return@withContext false
                 }
-                val segmentTexts = getChapterSegments(book, chapter)
+                // 按段落配对：仅保留有缓存音频的段落，音频与字幕严格一一对应，
+                // 避免某段合成失败/纯符号无中英文数字被跳过时，音频与字幕按下标对齐导致错位
+                val audioTextPairs = getChapterAudioTextPairs(book, chapter)
+                val alignedAudioFiles = audioTextPairs.map { it.first }
+                val alignedSegmentTexts = audioTextPairs.map { it.second }
+                if (alignedAudioFiles.isEmpty()) {
+                    AppLog.put("保存视频失败：章节《${chapter.title}》未找到任何音频缓存，无法生成视频")
+                    return@withContext false
+                }
                 val mp4File = File(outputFolder, "${filePrefix}.mp4")
                 val ok = VideoComposeUtil.composeSlideshowVideo(
-                    audioFiles = audioFiles,
+                    audioFiles = alignedAudioFiles,
                     imageTracks = imageTracks.map {
                         VideoComposeUtil.ImageTrack(it.file, it.startPara, it.endPara)
                     },
-                    segmentTexts = segmentTexts,
+                    segmentTexts = alignedSegmentTexts,
                     outputFile = mp4File,
                     frameRate = 10,
                     burnSubtitle = AppConfig.saveVideoWithMerge,

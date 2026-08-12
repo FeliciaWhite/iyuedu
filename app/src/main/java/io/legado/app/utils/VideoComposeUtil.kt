@@ -83,6 +83,13 @@ object VideoComposeUtil {
             AppLog.put("$TAG: 无图片轨道，无法合成视频")
             return false
         }
+        // 防御校验：音频段与字幕段必须等长，否则按音频段数截断字幕，避免错位/越界
+        if (segmentTexts.size != audioFiles.size) {
+            AppLog.put(
+                "$TAG: 音频与字幕段数不一致(音频=${audioFiles.size}, 字幕=${segmentTexts.size})，" +
+                    "已按音频段对齐字幕"
+            )
+        }
 
         // 0. 视频尺寸取第一张图片的尺寸（过大时等比缩小，宽高取偶），竖图输出竖版视频
         val (width, height) = resolveVideoSize(imageTracks.first().file)

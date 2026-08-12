@@ -177,6 +177,11 @@
     <string name="aloud_stop">朗读停止</string>
     <string name="clear_cache">清理缓存</string>
     <string name="clear_cache_success">成功清理缓存</string>
+    <string name="clear_tts_cache_title">清理朗读音频缓存</string>
+    <string name="clear_tts_cache_all">清除全部缓存音频</string>
+    <string name="clear_tts_cache_current_chapter">仅删除当前章节缓存音频</string>
+    <string name="clear_tts_cache_current_done">已删除当前章节 %d 个缓存文件</string>
+    <string name="clear_tts_cache_no_chapter">未定位到当前章节</string>
     <string name="action_save">保存</string>
     <string name="edit_source">编辑源</string>
     <string name="edit_book_source">编辑书源</string>

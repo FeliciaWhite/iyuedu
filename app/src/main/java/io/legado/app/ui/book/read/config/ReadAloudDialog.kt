@@ -515,9 +515,9 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
         llSpeakEngine.setOnClickListener {
             SpeakEngineDialog().show(childFragmentManager, "speakEngineDialog")
         }
-        // 朗读引擎 - 长按清理缓存
+        // 朗读引擎 - 长按弹出清理缓存弹窗
         llSpeakEngine.setOnLongClickListener {
-            SpeakEngineDialog.clearCacheStatic(requireContext())
+            SpeakEngineDialog.showClearCacheDialog(requireContext())
             true
         }
         cbTtsFollowSys.setOnCheckedChangeListener { _, isChecked ->

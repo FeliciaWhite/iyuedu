@@ -999,6 +999,17 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         }
     }
 
+    /**
+     * 删除当前正在阅读/朗读章节的缓存音频（HttpTTS + 系统TTS）。
+     * @return 删除的文件数量；若无法定位当前章节则返回 -1
+     */
+    fun deleteCurrentChapterCache(): Int {
+        val book = io.legado.app.model.ReadBook.book ?: return -1
+        val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, io.legado.app.model.ReadBook.durChapterIndex)
+            ?: return -1
+        return io.legado.app.service.HttpTtsAudioCache.deleteBookChapterCache(book, chapter)
+    }
+
     // 系统TTS单句合成超时（秒），默认120秒
     var sysTtsSynthesizeTimeout: Int
         get() = try {

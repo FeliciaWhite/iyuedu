@@ -2,6 +2,7 @@ package io.legado.app.ui.book.read.config
 
 import android.content.Context
 import android.os.Bundle
+import androidx.appcompat.app.AlertDialog
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
@@ -245,6 +246,50 @@ class SpeakEngineDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
                     android.widget.Toast.makeText(context, context.getString(R.string.clear_cache_success), android.widget.Toast.LENGTH_SHORT).show()
                 }
             }
+        }
+
+        /**
+         * 朗读引擎长按弹窗：清除全部 / 仅删除当前章节缓存音频
+         */
+        fun showClearCacheDialog(context: Context) {
+            val items = arrayOf(
+                context.getString(R.string.clear_tts_cache_all),
+                context.getString(R.string.clear_tts_cache_current_chapter)
+            )
+            AlertDialog.Builder(context)
+                .setTitle(R.string.clear_tts_cache_title)
+                .setItems(items) { _, which ->
+                    kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        ReadAloud.upReadAloudClass()
+                        when (which) {
+                            0 -> {
+                                AppConfig.clearTtsCache()
+                                withContext(Dispatchers.Main) {
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        context.getString(R.string.clear_cache_success),
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                            1 -> {
+                                val count = AppConfig.deleteCurrentChapterCache()
+                                withContext(Dispatchers.Main) {
+                                    val msg = if (count < 0) {
+                                        context.getString(R.string.clear_tts_cache_no_chapter)
+                                    } else {
+                                        context.getString(R.string.clear_tts_cache_current_done, count)
+                                    }
+                                    android.widget.Toast.makeText(
+                                        context, msg, android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        }
+                    }
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
         }
     }
 

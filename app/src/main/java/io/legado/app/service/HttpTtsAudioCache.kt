@@ -289,6 +289,31 @@ object HttpTtsAudioCache {
     }
 
     /**
+     * 删除指定章节的缓存音频文件（HttpTTS + 系统TTS）。
+     * 复用 getChapterSegments 的分段逻辑逐段重算文件名哈希，精确删除当前章节缓存。
+     * @return 删除的文件数量
+     */
+    fun deleteBookChapterCache(book: Book, chapter: BookChapter): Int {
+        val segments = getChapterSegments(book, chapter)
+        if (segments.isEmpty()) return 0
+        var deleted = 0
+        segments.forEachIndexed { index, text ->
+            val fileName = getFileName(chapter.title, text, index)
+            // 1. 删除 HttpTTS 缓存（含 .mp3 与 .seginfo 元数据）
+            val httpFile = File("${ttsFolderPath}$fileName.mp3")
+            if (httpFile.exists() && httpFile.delete()) deleted++
+            val httpSeg = File("${ttsFolderPath}$fileName.seginfo")
+            if (httpSeg.exists() && httpSeg.delete()) deleted++
+            // 2. 删除系统TTS缓存（带 index 与不带 index 两种命名）
+            val sysWithIndex = File(sysTtsCacheDir, getSysTtsFileName(chapter.title, text, index))
+            if (sysWithIndex.exists() && sysWithIndex.delete()) deleted++
+            val sysWithoutIndex = File(sysTtsCacheDir, getSysTtsFileName(chapter.title, text, -1))
+            if (sysWithoutIndex.exists() && sysWithoutIndex.delete()) deleted++
+        }
+        return deleted
+    }
+
+    /**
      * 自动合并章节缓存音频并保存。
      * 支持 HttpTTS 和系统TTS 双模式缓存查找。
      * 根据设置决定输出格式：WAV 或 M4A。

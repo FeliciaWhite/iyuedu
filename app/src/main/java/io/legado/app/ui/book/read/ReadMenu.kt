@@ -35,6 +35,7 @@ import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.model.ReadBook
 import io.legado.app.model.SourceCallBack
 import io.legado.app.ui.browser.WebViewActivity
+import io.legado.app.ui.book.read.config.SpeakEngineDialog
 import io.legado.app.ui.widget.seekbar.SeekBarChangeListener
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.ConstraintModify
@@ -506,9 +507,9 @@ class ReadMenu @JvmOverloads constructor(
                 callBack.showSpeakEngineDialog()
             }
         }
-        //朗读引擎 - 长按清理缓存
+        //朗读引擎 - 长按弹出清理缓存弹窗
         llSpeakEngine.setOnLongClickListener {
-            callBack.clearTtsCache()
+            SpeakEngineDialog.showClearCacheDialog(context)
             true
         }
         //界面

@@ -301,6 +301,14 @@
             android:key="showReadAloudCoverSubtitle"
             app:iconSpaceReserved="false" />
 
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="true"
+            android:title="@string/read_aloud_hide_status_bar_icons"
+            android:summary="@string/read_aloud_hide_status_bar_icons_summary"
+            android:key="readAloudHideStatusBarIcons"
+            android:dependency="showReadAloudCoverSubtitle"
+            app:iconSpaceReserved="false" />
+
         <io.legado.app.lib.prefs.EditTextPreference
             android:defaultValue="240"
             android:title="@string/read_aloud_cover_width"
@@ -308,6 +316,25 @@
             android:key="readAloudCoverWidth"
             android:inputType="number"
             android:maxLines="1"
+            android:dependency="showReadAloudCoverSubtitle"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="true"
+            android:title="@string/read_aloud_hide_chapter_progress"
+            android:summary="@string/read_aloud_hide_chapter_progress_summary"
+            android:key="readAloudHideChapterProgress"
+            android:dependency="showReadAloudCoverSubtitle"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.EditTextPreference
+            android:defaultValue="16"
+            android:title="@string/read_aloud_cover_top_margin"
+            android:summary="@string/read_aloud_cover_top_margin_summary"
+            android:key="readAloudCoverTopMargin"
+            android:inputType="number"
+            android:maxLines="1"
+            android:dependency="showReadAloudCoverSubtitle"
             app:iconSpaceReserved="false" />
 
         <io.legado.app.lib.prefs.SwitchPreference

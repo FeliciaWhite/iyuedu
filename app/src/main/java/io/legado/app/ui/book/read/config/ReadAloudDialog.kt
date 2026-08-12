@@ -36,6 +36,10 @@ import com.bumptech.glide.RequestBuilder
 import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.target.Target
 import com.bumptech.glide.request.transition.Transition
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import android.graphics.Color
 import io.legado.app.model.AiImageGenerator
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
@@ -59,6 +63,16 @@ import android.view.MotionEvent
 import androidx.appcompat.app.AlertDialog
 
 class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // 关键：使用 dialog_style_material（标准不透明主题），而非默认的 0（会继承
+        // 阅读页 Activity 的透明状态栏主题）。只有标准不透明主题下，
+        // statusBarColor / FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS 才会生效，
+        // 全屏背景图才能真正延伸到状态栏之下并遮住底层阅读页文字。
+        setStyle(STYLE_NO_FRAME, R.style.dialog_style_material)
+    }
+
     private val callBack: CallBack? get() = activity as? CallBack
     private val binding by viewBinding(DialogReadAloudBinding::bind)
     private var isSeekingChapterProgress = false
@@ -108,6 +122,22 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
                 // 裁剪失败（如文件损坏），退回直接加载
                 loadWithCrossFade(iv, file)
             }
+        }
+    }
+
+    // 全屏背景图与主预览同步显示同一张图（延伸到状态栏）
+    private fun loadIntoBoth(file: File) {
+        loadImageWithCenterCrop(binding.ivBookCover, file)
+        binding.ivFullscreenBg.let { bg ->
+            if (isGifFile(file)) bg.loadGif(file, ImageView.ScaleType.CENTER_CROP)
+            else Glide.with(bg).load(file).into(bg)
+        }
+    }
+
+    private fun loadIntoBoth(model: Any?) {
+        loadWithCrossFade(binding.ivBookCover, model)
+        binding.ivFullscreenBg.let { bg ->
+            Glide.with(bg).load(model).into(bg)
         }
     }
 
@@ -231,15 +261,56 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
 
     override fun onStart() {
         super.onStart()
+        // 根据是否显示封面字幕面板，选择全屏延伸 / 底部面板两套窗口模式
+        applyWindowMode(BaseReadAloudService.isRun && AppConfig.showReadAloudCoverSubtitle)
+    }
+
+    /**
+     * 两套窗口模式：
+     * - showImage = true （显示封面字幕面板）：全屏窗口，背景图延伸到状态栏之下，
+     *   彻底遮住底层阅读页文字，呈现沉浸式大图效果。
+     * - showImage = false（关闭封面显示）：底部面板模式，只占屏幕下半部分，
+     *   不延伸到状态栏，露出上方原文，不遮挡阅读内容。
+     */
+    @SuppressLint("WrongConstant")
+    private fun applyWindowMode(showImage: Boolean) {
         dialog?.window?.run {
             clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-            setBackgroundDrawableResource(R.color.background)
-            decorView.setPadding(0, 0, 0, 0)
-            val attr = attributes
-            attr.dimAmount = 0.0f
-            attr.gravity = Gravity.BOTTOM
-            attributes = attr
-            setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            setBackgroundDrawableResource(android.R.color.transparent)
+            val hideIcons = AppConfig.readAloudHideStatusBarIcons
+            if (showImage) {
+                // 全屏延伸模式
+                decorView.setPadding(0, 0, 0, 0)
+                WindowCompat.setDecorFitsSystemWindows(this, false)
+                clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS or WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION)
+                addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+                statusBarColor = Color.TRANSPARENT
+                navigationBarColor = Color.TRANSPARENT
+                val attr = attributes
+                attr.gravity = Gravity.FILL
+                attr.dimAmount = 0.0f
+                attributes = attr
+                setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                WindowInsetsControllerCompat(this, decorView).apply {
+                    if (hideIcons) {
+                        hide(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
+                    } else {
+                        show(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
+                    }
+                    // 黑色状态栏图标，在白色主题/浅色背景上清晰可见
+                    isAppearanceLightStatusBars = true
+                    isAppearanceLightNavigationBars = true
+                }
+            } else {
+                // 底部面板模式：只占下半部分，状态栏由 Activity 接管，不遮原文
+                WindowCompat.setDecorFitsSystemWindows(this, true)
+                clearFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+                val attr = attributes
+                attr.gravity = Gravity.BOTTOM
+                attr.dimAmount = 0.0f
+                attributes = attr
+                setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            }
         }
     }
 
@@ -263,7 +334,9 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
         val isLight = ColorUtils.isColorLight(bg)
         val textColor = requireContext().getPrimaryTextColor(isLight)
         binding.run {
-            rootView.setBackgroundColor(bg)
+            // 根布局保持透明：图片层全屏延伸状态栏，仅底部 content_panel 不透明，
+            // 避免整屏不透明背景遮盖原文阅读区（关闭/无图时露出原文）
+            contentPanel.setBackgroundColor(bg)
             tvPre.setTextColor(textColor)
             tvNext.setTextColor(textColor)
             ivPlayPrev.setColorFilter(textColor)
@@ -289,8 +362,17 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
             tvChapterProgressStart.setTextColor(textColor)
             tvChapterProgressEnd.setTextColor(textColor)
         }
+        applyChapterProgressVisibility()
         initData()
         initEvent()
+    }
+
+    /**
+     * 根据「隐藏章节进度条」设置控制进度条可见性。
+     * 开关默认开启（hide=true）→ 去掉进度条；关闭 → 显示进度条。
+     */
+    private fun applyChapterProgressVisibility() = binding.run {
+        llChapterProgress.visible(!AppConfig.readAloudHideChapterProgress)
     }
 
     private fun initData() = binding.run {
@@ -349,6 +431,11 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
                 width = widthPx
                 height = heightPx
             }
+            // 应用「图片与顶部的距离」设置（dp）
+            val topMarginPx = AppConfig.readAloudCoverTopMargin.coerceAtLeast(0).dpToPx()
+            (ivBookCover.layoutParams as? ViewGroup.MarginLayoutParams)?.apply {
+                topMargin = topMarginPx
+            }
 
             // 初始化跑马灯边框（直接画在封面 View 上，避免层级遮挡问题）
             // 仅在朗读播放中才启动跑马灯，暂停时不启动
@@ -368,10 +455,10 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
                     // AI生图已改为字数驱动，优先显示最近生成的图片
                     val lastImage = AiImageGenerator.getLastGeneratedImage()
                     if (lastImage != null) {
-                        loadImageWithCenterCrop(ivBookCover, lastImage)
+                        loadIntoBoth(lastImage)
                     } else {
                         // AI 生图开启但没缓存时，显示书籍封面
-                        loadWithCrossFade(ivBookCover, BookCover.load(requireContext(), book.getDisplayCover()))
+                        loadIntoBoth(BookCover.load(requireContext(), book.getDisplayCover()))
                     }
                     stopImageTimer()
                     // 始终请求 Service 同步当前场景图片：即使本地有缓存图片，
@@ -393,10 +480,15 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
                 seekChapterProgress.progress = progress
                 tvChapterProgressStart.text = "${(progress / 10f).toInt()}%"
             }
+            // 同步全屏背景图可见性
+            ivFullscreenBg.visible(show)
+        } else {
+            // 关闭封面显示：隐藏全屏背景图
+            ivFullscreenBg.gone()
         }
-        // 内容高度变化后，强制 Dialog 重新计算 window 高度，避免留下空白背景
-        dialog?.window?.run {
-            setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        // 根据开关切换窗口模式（全屏延伸 / 底部面板）
+        if (dialog?.isShowing == true) {
+            applyWindowMode(show)
         }
     }
 
@@ -410,12 +502,12 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
             bookImageFiles = bookImages
             currentImageIndex = 0
             // 显示第一张图片
-            loadImageWithCenterCrop(ivBookCover, bookImageFiles[0])
+            loadIntoBoth(bookImageFiles[0])
             // 启动定时器轮换图片
             startImageTimer(ivBookCover)
         } else {
             // 没有本地图片，显示书籍封面
-            loadWithCrossFade(ivBookCover, BookCover.load(requireContext(), book.getDisplayCover()))
+            loadIntoBoth(BookCover.load(requireContext(), book.getDisplayCover()))
             stopImageTimer()
         }
     }
@@ -442,7 +534,7 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
                     activity?.runOnUiThread {
                         currentImageIndex = (currentImageIndex + 1) % bookImageFiles.size
                         val nextImage = bookImageFiles[currentImageIndex]
-                        loadImageWithCenterCrop(ivBookCover, nextImage)
+                        loadIntoBoth(nextImage)
                     }
                 }
             }, period, period)
@@ -468,7 +560,7 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
         currentImageIndex = (currentImageIndex - direction + size) % size
         val file = bookImageFiles[currentImageIndex]
         if (file.exists()) {
-            loadImageWithCenterCrop(binding.ivBookCover, file)
+            loadIntoBoth(file)
         }
         // 手动切换后重新启动轮播定时器
         startImageTimer(binding.ivBookCover)
@@ -775,7 +867,7 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
         aiHistoryIndex = newIndex
         val file = aiHistoryImages[aiHistoryIndex]
         if (file.exists()) {
-            loadImageWithCenterCrop(binding.ivBookCover, file)
+            loadIntoBoth(file)
         }
         // 停留在滑动到的图片，启动 30 秒后回最新的定时器
         scheduleAiHistoryReset()
@@ -795,7 +887,7 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
                         aiHistoryIndex = 0
                         val latest = aiHistoryImages.firstOrNull()
                         if (latest != null && latest.exists()) {
-                            loadImageWithCenterCrop(binding.ivBookCover, latest)
+                            loadIntoBoth(latest)
                         }
                         aiHistoryResetTimer?.cancel()
                         aiHistoryResetTimer = null
@@ -819,6 +911,11 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
         val actions = mutableListOf<() -> Unit>()
         items.add("轮播时间设置")
         actions.add { showIntervalSetting() }
+        // 图片宽度设置 / 图片与顶部距离设置：与朗读界面设置联通
+        items.add("图片宽度设置")
+        actions.add { showCoverWidthSetting() }
+        items.add("图片与顶部距离设置")
+        actions.add { showCoverTopMarginSetting() }
         if (AppConfig.readAloudAiImage) {
             items.add("保存当前图片")
             actions.add { saveCurrentAiImage() }
@@ -901,6 +998,52 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
                 startImageTimer(binding.ivBookCover)
                 val tip = if (sec <= 0) "已设为不自动轮播（仅手动切换）" else "已设为 ${sec} 秒轮播"
                 toastOnUi(tip)
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    /**
+     * 图片宽度设置：与朗读界面设置（readAloudCoverWidth）联通。
+     * 保存后重新布局上半部分以应用新宽度。
+     */
+    private fun showCoverWidthSetting() {
+        val editText = android.widget.EditText(requireContext()).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            setText(AppConfig.readAloudCoverWidth.toString())
+            hint = "宽度（dp），范围 80~600"
+        }
+        androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle("图片宽度设置（dp）")
+            .setView(editText)
+            .setPositiveButton("确定") { _, _ ->
+                val width = editText.text.toString().toIntOrNull()?.coerceIn(80, 600) ?: 240
+                AppConfig.readAloudCoverWidth = width
+                upTopSection()
+                toastOnUi("图片宽度已设为 ${width}dp")
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    /**
+     * 图片与顶部距离设置：与朗读界面设置（readAloudCoverTopMargin）联通。
+     * 保存后重新布局上半部分以应用新顶部距离。
+     */
+    private fun showCoverTopMarginSetting() {
+        val editText = android.widget.EditText(requireContext()).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            setText(AppConfig.readAloudCoverTopMargin.toString())
+            hint = "距离顶部（dp），默认 16"
+        }
+        androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle("图片与顶部距离（dp）")
+            .setView(editText)
+            .setPositiveButton("确定") { _, _ ->
+                val margin = editText.text.toString().toIntOrNull()?.coerceAtLeast(0) ?: 16
+                AppConfig.readAloudCoverTopMargin = margin
+                upTopSection()
+                toastOnUi("图片与顶部距离已设为 ${margin}dp")
             }
             .setNegativeButton("取消", null)
             .show()
@@ -1044,7 +1187,7 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
                     return@observeEvent
                 }
                 stopImageTimer() // AI 生图开启时不进行本地图片轮换
-                loadImageWithCenterCrop(binding.ivBookCover, File(imagePath))
+                loadIntoBoth(File(imagePath))
                 // 新图片生成，重置历史浏览到最新一张，并取消回最新定时器
                 cancelAiHistoryReset()
                 aiHistoryImages = AiImageGenerator.getDisplayGallery()

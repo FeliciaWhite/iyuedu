@@ -1156,7 +1156,13 @@
     <string name="video_subtitle_split">视频字幕按句切割</string>
     <string name="video_subtitle_split_summary">开启后字幕按标点切分为小段依次显示（复用"字幕每行最大字数"设置）；关闭则整段作为一条字幕</string>
     <string name="show_read_aloud_cover_subtitle">显示封面字幕和进度条</string>
-    <string name="show_read_aloud_cover_subtitle_summary">在朗读对话框中显示书籍封面、当前字幕和章节进度条</string>
+    <string name="show_read_aloud_cover_subtitle_summary">在朗读对话框中显示书籍封面、当前字幕和章节进度条（开启后背景大图延伸到状态栏）</string>
+    <string name="read_aloud_hide_status_bar_icons">隐藏状态栏图标</string>
+    <string name="read_aloud_hide_status_bar_icons_summary">朗读大图全屏模式下隐藏状态栏的时间、电量等图标（默认开启）</string>
+    <string name="read_aloud_hide_chapter_progress">隐藏章节进度条</string>
+    <string name="read_aloud_hide_chapter_progress_summary">开启后去掉字幕下方的当前章节进度条，关闭则显示进度条（默认开启）</string>
+    <string name="read_aloud_cover_top_margin">图片与顶部距离</string>
+    <string name="read_aloud_cover_top_margin_summary">朗读对话框中封面/图片距顶部的距离（dp），默认16，与长按图片设置联动</string>
     <string name="read_aloud_cover_width">封面宽度</string>
     <string name="read_aloud_cover_width_summary">自定义朗读对话框封面宽度（dp），高度自动按340/240比例匹配，默认240</string>
     <string name="read_aloud_cover_marquee">封面跑马灯边框</string>

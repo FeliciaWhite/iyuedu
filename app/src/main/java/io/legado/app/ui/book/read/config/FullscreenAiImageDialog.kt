@@ -111,7 +111,12 @@ class FullscreenAiImageDialog : BaseDialogFragment(R.layout.dialog_fullscreen_im
             statusBarColor = Color.BLACK
             navigationBarColor = Color.BLACK
             WindowInsetsControllerCompat(this, decorView).apply {
-                show(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
+                // 状态栏图标是否隐藏，受朗读设置「隐藏状态栏图标」开关控制（默认隐藏）
+                if (AppConfig.readAloudHideStatusBarIcons) {
+                    hide(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
+                } else {
+                    show(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
+                }
                 // 状态栏图标用浅色（白色），在黑色背景上可见
                 isAppearanceLightStatusBars = false
                 isAppearanceLightNavigationBars = false

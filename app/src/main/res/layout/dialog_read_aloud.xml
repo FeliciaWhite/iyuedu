@@ -1,23 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/root_view"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:background="@color/background_menu"
-    android:orientation="vertical"
-    android:paddingLeft="16dp"
-    android:paddingTop="6dp"
-    android:paddingRight="16dp"
-    android:paddingBottom="6dp">
+    android:layout_height="match_parent"
+    android:background="@android:color/transparent">
+
+    <!-- 全屏背景图：延伸到状态栏，置于控制条之下 -->
+    <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/iv_fullscreen_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:visibility="gone" />
+
+    <!-- 底部控制面板 -->
+    <LinearLayout
+        android:id="@+id/content_panel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="@color/background_menu"
+        android:orientation="vertical"
+        android:paddingLeft="16dp"
+        android:paddingTop="6dp"
+        android:paddingRight="16dp"
+        android:paddingBottom="6dp">
 
     <!-- ========== 上半部分：仅 Http 转发器模式显示 ========== -->
     <LinearLayout
         android:id="@+id/ll_read_aloud_top"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_height="wrap_content"
         android:orientation="vertical"
         android:visibility="gone"
         tools:visibility="visible">
@@ -91,6 +106,7 @@
 
         <!-- 3. 章节整体进度条 -->
         <LinearLayout
+            android:id="@+id/ll_chapter_progress"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
@@ -698,4 +714,6 @@
 
     </LinearLayout>
 
-</LinearLayout>
+    </LinearLayout>
+
+</FrameLayout>

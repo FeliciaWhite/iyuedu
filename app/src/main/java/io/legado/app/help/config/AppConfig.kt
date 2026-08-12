@@ -33,6 +33,26 @@ import java.net.InetAddress
 
 @Suppress("MemberVisibilityCanBePrivate", "ConstPropertyName")
 object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
+
+    // 迁移：部分 key 在旧版本中以 Int 形式存储，但对应 Preference（EditTextPreference）
+    // 初始化时调用 getString() 会触发 ClassCastException 导致打开设置界面崩溃。
+    // 在对象初始化时将这些残留 Int 值转为 String，确保后续读取安全。
+    init {
+        val sp = appCtx.defaultSharedPreferences
+        val keysToMigrate = listOf(
+            PreferKey.readAloudImageInterval,
+            PreferKey.readAloudCoverWidth,
+            PreferKey.readAloudCoverTopMargin
+        )
+        for (key in keysToMigrate) {
+            val v = sp.all[key]
+            if (v is Int) {
+                sp.edit().remove(key).apply()
+                sp.edit().putString(key, v.toString()).apply()
+            }
+        }
+    }
+
     val isCronet = appCtx.getPrefBoolean(PreferKey.cronet)
     var useAntiAlias = appCtx.getPrefBoolean(PreferKey.antiAlias)
     var userAgent: String = getPrefUserAgent()
@@ -966,6 +986,29 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefBoolean(PreferKey.showReadAloudCoverSubtitle, true)
         set(value) = appCtx.putPrefBoolean(PreferKey.showReadAloudCoverSubtitle, value)
 
+    // 朗读大图全屏模式下是否隐藏状态栏图标（时间/电池等），默认 true 隐藏
+    var readAloudHideStatusBarIcons: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.readAloudHideStatusBarIcons, true)
+        set(value) = appCtx.putPrefBoolean(PreferKey.readAloudHideStatusBarIcons, value)
+
+    // 朗读界面是否隐藏当前章节进度条，默认 true 隐藏（开启即去掉进度条）
+    var readAloudHideChapterProgress: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.readAloudHideChapterProgress, true)
+        set(value) = appCtx.putPrefBoolean(PreferKey.readAloudHideChapterProgress, value)
+
+    // 朗读界面小图（封面/本地图）与顶部的距离，单位 dp，默认 16
+    // 注意：必须用 String 存储，因为 EditTextPreference 底层调用 getString()
+    var readAloudCoverTopMargin: Int
+        get() = try {
+            appCtx.defaultSharedPreferences.getString(PreferKey.readAloudCoverTopMargin, "16")
+                ?.toIntOrNull() ?: 16
+        } catch (e: ClassCastException) {
+            // 兼容旧版本误存为 Int 的情况
+            appCtx.getPrefInt(PreferKey.readAloudCoverTopMargin, 16)
+        }
+        set(value) = appCtx.defaultSharedPreferences.edit()
+            .putString(PreferKey.readAloudCoverTopMargin, value.toString()).apply()
+
     // 11. 朗读对话框封面宽度（dp），默认240，高度按340/240比例自动匹配
     // 注意：必须用 String 存储，因为 EditTextPreference 底层调用 getString()
     var readAloudCoverWidth: Int
@@ -1248,9 +1291,17 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     }
 
     // 20. 朗读/大图图片轮播间隔（秒，默认5，0=不自动轮播，仅手动切换）
+    // 注意：必须用 String 存储，因为 pref_config_aloud.xml 中是 EditTextPreference，
+    // 其初始化会调用 SharedPreferences.getString()，若旧版本以 Int 存储则会崩溃。
     var readAloudImageInterval: Int
-        get() = appCtx.getPrefInt(PreferKey.readAloudImageInterval, 5)
-        set(value) = appCtx.putPrefInt(PreferKey.readAloudImageInterval, value)
+        get() = try {
+            appCtx.defaultSharedPreferences.getString(PreferKey.readAloudImageInterval, "5")
+                ?.toIntOrNull() ?: 5
+        } catch (e: ClassCastException) {
+            appCtx.getPrefInt(PreferKey.readAloudImageInterval, 5)
+        }
+        set(value) = appCtx.defaultSharedPreferences.edit()
+            .putString(PreferKey.readAloudImageInterval, value.toString()).apply()
 
     // ================= 自定义功能区域 End =================
 

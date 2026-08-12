@@ -359,7 +359,8 @@ class CharacterManagerDialog : DialogFragment() {
             "固定性别年龄",
             "释放角色",
             "执行合并",
-            "取消所有标记"
+            "取消所有标记",
+            "置顶角色"
         )
 
         AlertDialog.Builder(requireContext())
@@ -375,9 +376,40 @@ class CharacterManagerDialog : DialogFragment() {
                     6 -> releaseCharacter(position)
                     7 -> doMerge()
                     8 -> clearAllMarks()
+                    9 -> pinMarkedToTop(position)
                 }
             }
             .show()
+    }
+
+    // 把标记变色的角色（或单条长按项）置顶，支持多个一起置顶
+    private fun pinMarkedToTop(longPressedIndex: Int) {
+        // 需要置顶的真实索引集合（按原列表顺序）
+        val toPin = markedIndices.toMutableList().apply { sort() }
+        if (toPin.isEmpty()) {
+            // 没有任何标记时，置顶当前长按项
+            toPin.add(longPressedIndex)
+        }
+
+        val moving = toPin.mapNotNull { characterRecords.optJSONObject(it) }
+        val remaining = (0 until characterRecords.length())
+            .filter { it !in toPin }
+            .mapNotNull { characterRecords.optJSONObject(it) }
+
+        val newArray = org.json.JSONArray()
+        moving.forEach { newArray.put(it) }
+        remaining.forEach { newArray.put(it) }
+        characterRecords = newArray
+
+        // 重新映射标记与选中到新索引（置顶后它们位于 [0, moving.size)）
+        val wasSelectedMarked = selectedIndex in toPin
+        markedIndices.clear()
+        for (i in moving.indices) markedIndices.add(i)
+        selectedIndex = if (wasSelectedMarked) toPin.indexOf(selectedIndex) else -1
+
+        saveCharacters()
+        updateCharacterList()
+        toast(if (moving.size > 1) "已置顶 ${moving.size} 个角色" else "已置顶角色")
     }
 
     private fun updateCharacterList() {

@@ -163,32 +163,68 @@ fun Context.startForegroundServiceCompat(intent: Intent) {
 val Context.defaultSharedPreferences: SharedPreferences
     get() = PreferenceManager.getDefaultSharedPreferences(this)
 
-fun Context.getPrefBoolean(key: String, defValue: Boolean = false) =
-    defaultSharedPreferences.getBoolean(key, defValue)
+fun Context.getPrefBoolean(key: String, defValue: Boolean = false): Boolean {
+    val v = defaultSharedPreferences.all[key]
+    return when (v) {
+        is Boolean -> v
+        is String -> v.toBooleanStrictOrNull() ?: defValue
+        is Number -> v.toInt() != 0
+        else -> defaultSharedPreferences.getBoolean(key, defValue)
+    }
+}
 
 fun Context.putPrefBoolean(key: String, value: Boolean = false) =
     defaultSharedPreferences.edit { putBoolean(key, value) }
 
-fun Context.getPrefInt(key: String, defValue: Int = 0) =
-    defaultSharedPreferences.getInt(key, defValue)
+fun Context.getPrefInt(key: String, defValue: Int = 0): Int {
+    // 兼容旧版本偏好类型不一致（如曾以 Float 存储），避免 ClassCastException 崩溃
+    val v = defaultSharedPreferences.all[key]
+    return when (v) {
+        is Int -> v
+        is Number -> v.toInt()
+        is String -> v.toIntOrNull() ?: defValue
+        else -> defaultSharedPreferences.getInt(key, defValue)
+    }
+}
 
 fun Context.putPrefInt(key: String, value: Int) =
     defaultSharedPreferences.edit { putInt(key, value) }
 
-fun Context.getPrefLong(key: String, defValue: Long = 0L) =
-    defaultSharedPreferences.getLong(key, defValue)
+fun Context.getPrefLong(key: String, defValue: Long = 0L): Long {
+    val v = defaultSharedPreferences.all[key]
+    return when (v) {
+        is Long -> v
+        is Number -> v.toLong()
+        is String -> v.toLongOrNull() ?: defValue
+        else -> defaultSharedPreferences.getLong(key, defValue)
+    }
+}
 
 fun Context.putPrefLong(key: String, value: Long) =
     defaultSharedPreferences.edit { putLong(key, value) }
 
-fun Context.getPrefFloat(key: String, defValue: Float = 0f) =
-    defaultSharedPreferences.getFloat(key, defValue)
+fun Context.getPrefFloat(key: String, defValue: Float = 0f): Float {
+    val v = defaultSharedPreferences.all[key]
+    return when (v) {
+        is Float -> v
+        is Number -> v.toFloat()
+        is String -> v.toFloatOrNull() ?: defValue
+        else -> defaultSharedPreferences.getFloat(key, defValue)
+    }
+}
 
 fun Context.putPrefFloat(key: String, value: Float) =
     defaultSharedPreferences.edit { putFloat(key, value) }
 
-fun Context.getPrefString(key: String, defValue: String? = null) =
-    defaultSharedPreferences.getString(key, defValue)
+fun Context.getPrefString(key: String, defValue: String? = null): String? {
+    // 兼容旧版本偏好类型不一致（如曾以 Float/Int 存储），避免 ClassCastException 崩溃
+    val v = defaultSharedPreferences.all[key]
+    return when (v) {
+        is String -> v
+        null -> defValue
+        else -> v.toString()
+    }
+}
 
 fun Context.putPrefString(key: String, value: String?) =
     defaultSharedPreferences.edit { putString(key, value) }

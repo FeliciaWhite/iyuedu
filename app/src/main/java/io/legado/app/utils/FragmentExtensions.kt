@@ -41,26 +41,57 @@ fun Fragment.showDialogFragment(dialogFragment: DialogFragment) {
     dialogFragment.show(childFragmentManager, dialogFragment::class.simpleName)
 }
 
-fun Fragment.getPrefBoolean(key: String, defValue: Boolean = false) =
-    requireContext().defaultSharedPreferences.getBoolean(key, defValue)
+fun Fragment.getPrefBoolean(key: String, defValue: Boolean = false): Boolean {
+    val sp = requireContext().defaultSharedPreferences
+    val v = sp.all[key]
+    return when (v) {
+        is Boolean -> v
+        is String -> v.toBooleanStrictOrNull() ?: defValue
+        is Number -> v.toInt() != 0
+        else -> sp.getBoolean(key, defValue)
+    }
+}
 
 fun Fragment.putPrefBoolean(key: String, value: Boolean = false) =
     requireContext().defaultSharedPreferences.edit { putBoolean(key, value) }
 
-fun Fragment.getPrefInt(key: String, defValue: Int = 0) =
-    requireContext().defaultSharedPreferences.getInt(key, defValue)
+fun Fragment.getPrefInt(key: String, defValue: Int = 0): Int {
+    val sp = requireContext().defaultSharedPreferences
+    val v = sp.all[key]
+    return when (v) {
+        is Int -> v
+        is Number -> v.toInt()
+        is String -> v.toIntOrNull() ?: defValue
+        else -> sp.getInt(key, defValue)
+    }
+}
 
 fun Fragment.putPrefInt(key: String, value: Int) =
     requireContext().defaultSharedPreferences.edit { putInt(key, value) }
 
-fun Fragment.getPrefLong(key: String, defValue: Long = 0L) =
-    requireContext().defaultSharedPreferences.getLong(key, defValue)
+fun Fragment.getPrefLong(key: String, defValue: Long = 0L): Long {
+    val sp = requireContext().defaultSharedPreferences
+    val v = sp.all[key]
+    return when (v) {
+        is Long -> v
+        is Number -> v.toLong()
+        is String -> v.toLongOrNull() ?: defValue
+        else -> sp.getLong(key, defValue)
+    }
+}
 
 fun Fragment.putPrefLong(key: String, value: Long) =
     requireContext().defaultSharedPreferences.edit { putLong(key, value) }
 
-fun Fragment.getPrefString(key: String, defValue: String? = null) =
-    requireContext().defaultSharedPreferences.getString(key, defValue)
+fun Fragment.getPrefString(key: String, defValue: String? = null): String? {
+    val sp = requireContext().defaultSharedPreferences
+    val v = sp.all[key]
+    return when (v) {
+        is String -> v
+        null -> defValue
+        else -> v.toString()
+    }
+}
 
 fun Fragment.putPrefString(key: String, value: String) =
     requireContext().defaultSharedPreferences.edit { putString(key, value) }

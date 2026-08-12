@@ -37,6 +37,14 @@ data class AiImageTemplate(
      */
     @ColumnInfo(defaultValue = "0")
     var useBase64Response: Boolean = false,
+    /**
+     * 是否对发给 API 的正文做角色标注。
+     * 开启后，正文中的左双引号“右侧会插入 <<姓名（性别/年龄）>>，
+     * 角色信息来自 AI 章节缓存文件（与导出小说“添加标注”同源）。
+     * 关闭则按原正文发送。
+     */
+    @ColumnInfo(defaultValue = "0")
+    var annotateRoles: Boolean = false,
     @ColumnInfo(defaultValue = "0")
     var lastUpdateTime: Long = System.currentTimeMillis()
 )

@@ -59,6 +59,7 @@ class AiImageSettingsDialog : BaseDialogFragment(0) {
 
     /** 测试连接旁的开关：开启后使用 base64 方式获取图片（请求体附带 response_format=b64_json） */
     private lateinit var switchBase64: SwitchCompat
+    private lateinit var switchAnnotate: SwitchCompat
 
     @SuppressLint("SetTextI18n")
     override fun onCreateView(
@@ -476,6 +477,47 @@ sk-aaa@@sk-bbb@@sk-ccc
         )
         root.addView(testRow)
 
+        // 角色标注开关
+        switchAnnotate = SwitchCompat(context)
+        val annotateLabel = TextView(context).apply {
+            text = "角色标注"
+            textSize = 14f
+            setPadding(0, 0, 6.dpToPx(), 0)
+        }
+        val annotateHelp = TextView(context).apply {
+            text = "  ?"
+            textSize = 16f
+            setTextColor(android.graphics.Color.parseColor("#1976D2"))
+            setPadding(6.dpToPx(), 0, 0, 0)
+            setOnClickListener {
+                AlertDialog.Builder(context)
+                    .setTitle("角色标注说明")
+                    .setMessage("""开启后，发给 AI 生图的正文会在每个左双引号“右侧插入角色标注。
+
+【说明】
+1. 角色信息来自 AI 章节缓存文件（与导出小说“添加标注”同源）；
+2. 标注形如：<<姓名（性别/年龄）>>，仅在正文含左双引号且存在缓存时生效；
+3. 关闭则按原始正文发送给模型。""")
+                    .setPositiveButton("知道了", null)
+                    .show()
+            }
+        }
+        val annotateRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 8.dpToPx(), 0, 0)
+        }
+        val annotateLabelWrap = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setOnClickListener { switchAnnotate.isChecked = !switchAnnotate.isChecked }
+        }
+        annotateLabelWrap.addView(annotateLabel)
+        annotateLabelWrap.addView(annotateHelp)
+        annotateRow.addView(annotateLabelWrap)
+        annotateRow.addView(switchAnnotate)
+        root.addView(annotateRow)
+
         val btnResetPrompt = Button(context).apply {
             text = "恢复默认提示词"
             setOnClickListener {
@@ -563,6 +605,16 @@ sk-aaa@@sk-bbb@@sk-ccc
         switchBase64.setOnCheckedChangeListener { _, isChecked ->
             val tmpl = currentTemplate ?: return@setOnCheckedChangeListener
             currentTemplate = tmpl.copy(useBase64Response = isChecked)
+            lifecycleScope.launch(Dispatchers.IO) {
+                appDb.aiImageTemplateDao.insert(currentTemplate!!)
+            }
+        }
+        // 同步角色标注开关状态（临时移除 listener 避免触发保存）
+        switchAnnotate.setOnCheckedChangeListener(null)
+        switchAnnotate.isChecked = template.annotateRoles
+        switchAnnotate.setOnCheckedChangeListener { _, isChecked ->
+            val tmpl = currentTemplate ?: return@setOnCheckedChangeListener
+            currentTemplate = tmpl.copy(annotateRoles = isChecked)
             lifecycleScope.launch(Dispatchers.IO) {
                 appDb.aiImageTemplateDao.insert(currentTemplate!!)
             }
@@ -657,6 +709,7 @@ sk-aaa@@sk-bbb@@sk-ccc
             negativePrompt = etNegativePrompt.text?.toString()?.trim().orEmpty(),
             filterWords = etFilterWords.text?.toString()?.trim().orEmpty(),
             useBase64Response = switchBase64.isChecked,
+            annotateRoles = switchAnnotate.isChecked,
             lastUpdateTime = System.currentTimeMillis()
         )
 

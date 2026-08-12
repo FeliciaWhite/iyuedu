@@ -2,6 +2,7 @@ package io.legado.app.ui.book.toc
 
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
+import org.json.JSONObject
 import java.io.File
 
 /**
@@ -91,4 +92,64 @@ object AiCacheFileUtil {
         }
         return deletedCount
     }
+
+    /**
+     * 为文本添加角色标注：在每个左双引号 “ 后面插入 <<姓名（性别/年龄）>>。
+     * 角色信息来自 AI 章节缓存文件（results 字段，键为双引号序号，值为 name/gender/age）。
+     * 无缓存文件或解析失败时返回原文本。
+     * 导出小说与 AI 生图共用此逻辑。
+     */
+    fun annotateTextWithRoles(text: String, book: Book, chapter: BookChapter): String {
+        val cacheFile = getChapterCacheFile(book, chapter)
+        if (!cacheFile.exists()) return text
+
+        return try {
+            val json = JSONObject(cacheFile.readText())
+            val results = json.optJSONObject("results") ?: return text
+            val roleMap = mutableMapOf<Int, Triple<String, String, String>>()
+            results.keys().forEach { key ->
+                val seq = key.toIntOrNull() ?: return@forEach
+                val obj = results.getJSONObject(key)
+                val name = obj.optString("name", "")
+                if (name.isNotBlank()) {
+                    roleMap[seq] = Triple(
+                        name,
+                        obj.optString("gender", ""),
+                        obj.optString("age", "")
+                    )
+                }
+            }
+            if (roleMap.isEmpty()) return text
+
+            val sb = StringBuilder()
+            var seq = 0
+            var i = 0
+            while (i < text.length) {
+                val ch = text[i]
+                if (ch == '“') {
+                    seq++
+                    sb.append(ch)
+                    roleMap[seq]?.let { (name, gender, age) ->
+                        val genderAge = buildString {
+                            if (gender.isNotBlank()) append(gender)
+                            if (gender.isNotBlank() && age.isNotBlank()) append("/")
+                            if (age.isNotBlank()) append(age)
+                        }
+                        if (genderAge.isNotBlank()) {
+                            sb.append("<<").append(name).append("（").append(genderAge).append("）>>")
+                        } else {
+                            sb.append("<<").append(name).append(">>")
+                        }
+                    }
+                } else {
+                    sb.append(ch)
+                }
+                i++
+            }
+            sb.toString()
+        } catch (e: Exception) {
+            text
+        }
+    }
 }
+

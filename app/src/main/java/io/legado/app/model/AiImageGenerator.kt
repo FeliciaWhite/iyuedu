@@ -6,6 +6,9 @@ import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.AiImageTemplate
+import io.legado.app.data.entities.BookChapter
+import io.legado.app.model.ReadBook
+import io.legado.app.ui.book.toc.AiCacheFileUtil
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.tts.TtsEngineActivator
@@ -834,8 +837,14 @@ object AiImageGenerator {
         bookName: String,
     ): String {
         val moodDesc = if (mood.isNotBlank()) "场景氛围：$mood。" else ""
+        // 角色标注：开启后，对发给 API 的正文做角色标注（与导出小说“添加标注”同源）
+        val annotatedSourceText = if (template.annotateRoles) {
+            annotateSourceText(sourceText)
+        } else {
+            sourceText
+        }
         // 正文过滤：删除正文中包含的过滤词语（多个用竖线分隔）
-        val filteredText = filterSourceText(sourceText, template.filterWords)
+        val filteredText = filterSourceText(annotatedSourceText, template.filterWords)
         val textDesc = if (filteredText.isNotBlank()) {
             val truncated = if (filteredText.length > 350) filteredText.take(350) + "..." else filteredText
             "内容片段：$truncated。"
@@ -847,6 +856,21 @@ object AiImageGenerator {
             .replace("{text}", textDesc)
             .replace("{book}", bookDesc)
             .replace("{style}", template.imageStyle)
+    }
+
+    /**
+     * 对正文做角色标注（在每个左双引号“右侧插入 <<姓名（性别/年龄）>>）。
+     * 角色信息来自 AI 章节缓存文件，需要当前书籍与章节信息。
+     * 无当前书籍/章节或标注失败时，返回原文本。
+     */
+    private fun annotateSourceText(sourceText: String): String {
+        val book = ReadBook.book ?: return sourceText
+        val chapter = ReadBook.curTextChapter?.chapter ?: return sourceText
+        return try {
+            AiCacheFileUtil.annotateTextWithRoles(sourceText, book, chapter)
+        } catch (e: Exception) {
+            sourceText
+        }
     }
 
     /**

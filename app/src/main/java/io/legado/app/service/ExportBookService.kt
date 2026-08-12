@@ -347,58 +347,10 @@ class ExportBookService : BaseService() {
     /**
      * 为导出文本添加角色标注
      * 在每个左双引号 " 后面添加 <<姓名（性别/年龄）>>
+     * 复用 AiCacheFileUtil 中的共享逻辑（与 AI 生图标注同源）。
      */
     private fun annotateTextWithRoles(text: String, book: Book, chapter: BookChapter): String {
-        val cacheFile = AiCacheFileUtil.getChapterCacheFile(book, chapter)
-        if (!cacheFile.exists()) return text
-
-        return try {
-            val json = org.json.JSONObject(cacheFile.readText())
-            val results = json.optJSONObject("results") ?: return text
-            val roleMap = mutableMapOf<Int, Triple<String, String, String>>()
-            results.keys().forEach { key ->
-                val seq = key.toIntOrNull() ?: return@forEach
-                val obj = results.getJSONObject(key)
-                val name = obj.optString("name", "")
-                if (name.isNotBlank()) {
-                    roleMap[seq] = Triple(
-                        name,
-                        obj.optString("gender", ""),
-                        obj.optString("age", "")
-                    )
-                }
-            }
-            if (roleMap.isEmpty()) return text
-
-            val sb = StringBuilder()
-            var seq = 0
-            var i = 0
-            while (i < text.length) {
-                val ch = text[i]
-                if (ch == '“') {
-                    seq++
-                    sb.append(ch)
-                    roleMap[seq]?.let { (name, gender, age) ->
-                        val genderAge = buildString {
-                            if (gender.isNotBlank()) append(gender)
-                            if (gender.isNotBlank() && age.isNotBlank()) append("/")
-                            if (age.isNotBlank()) append(age)
-                        }
-                        if (genderAge.isNotBlank()) {
-                            sb.append("<<").append(name).append("（").append(genderAge).append("）>>")
-                        } else {
-                            sb.append("<<").append(name).append(">>")
-                        }
-                    }
-                } else {
-                    sb.append(ch)
-                }
-                i++
-            }
-            sb.toString()
-        } catch (e: Exception) {
-            text
-        }
+        return AiCacheFileUtil.annotateTextWithRoles(text, book, chapter)
     }
 
     /**

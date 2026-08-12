@@ -257,12 +257,12 @@ class AiImageSettingsDialog : BaseDialogFragment(0) {
             setText(AppConfig.aiImageCharCount.toString())
             hint = "默认200，50~5000"
         }
-        charCountWrap.addView(etCharCount)
         charCountWrap.addView(TextView(context).apply {
             text = "正文分析字数"
             textSize = 11f
-            setPadding(0, 2.dpToPx(), 0, 0)
+            setPadding(0, 0, 0, 2.dpToPx())
         })
+        charCountWrap.addView(etCharCount)
 
         // 上下文字数
         val contextCountWrap = LinearLayout(context).apply {
@@ -275,12 +275,12 @@ class AiImageSettingsDialog : BaseDialogFragment(0) {
             setText(AppConfig.aiImageContextCharCount.toString())
             hint = "默认50，0~2000"
         }
-        contextCountWrap.addView(etContextCount)
         contextCountWrap.addView(TextView(context).apply {
             text = "上文/后续字数"
             textSize = 11f
-            setPadding(0, 2.dpToPx(), 0, 0)
+            setPadding(0, 0, 0, 2.dpToPx())
         })
+        contextCountWrap.addView(etContextCount)
 
         charCountRow.addView(charCountWrap)
         charCountRow.addView(contextCountWrap)

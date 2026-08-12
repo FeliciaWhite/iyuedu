@@ -22,7 +22,7 @@ object DatabaseMigrations {
             migration_39_40, migration_40_41,             migration_41_42,             migration_42_43,
             migration_89_90,
             migration_90_91, migration_91_92, migration_92_93, migration_93_94,
-            migration_94_95, migration_95_96,
+            migration_94_95, migration_95_96, migration_96_97,
         )
     }
 
@@ -486,6 +486,13 @@ object DatabaseMigrations {
         override fun migrate(db: SupportSQLiteDatabase) {
             // AI 生图模板新增「正文过滤词语」字段
             db.execSQL("ALTER TABLE `aiImageTemplate` ADD `filterWords` TEXT NOT NULL DEFAULT ''")
+        }
+    }
+
+    private val migration_96_97 = object : Migration(96, 97) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // AI 生图模板新增「角色标注」开关字段，兼容旧版数据库
+            db.execSQL("ALTER TABLE `aiImageTemplate` ADD `annotateRoles` INTEGER NOT NULL DEFAULT 0")
         }
     }
 

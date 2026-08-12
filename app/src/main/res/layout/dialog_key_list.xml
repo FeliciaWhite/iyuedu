@@ -38,14 +38,6 @@
             android:textSize="12sp" />
 
         <Button
-            android:id="@+id/btn_modify_key"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="修改密钥"
-            android:textSize="12sp" />
-
-        <Button
             android:id="@+id/btn_show_current"
             android:layout_width="0dp"
             android:layout_height="wrap_content"

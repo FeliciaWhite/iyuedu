@@ -20,7 +20,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:layout_marginBottom="12dp">
+            android:layout_marginBottom="4dp">
 
             <TextView
                 android:layout_width="wrap_content"
@@ -65,14 +65,14 @@
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:background="#888888"
-            android:layout_marginVertical="8dp"/>
+            android:layout_marginVertical="4dp"/>
 
         <!-- 第二行：按钮组 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="8dp">
+            android:layout_marginBottom="4dp">
 
             <Button
                 android:id="@+id/btn_add_character"
@@ -125,7 +125,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="8dp">
+            android:layout_marginBottom="4dp">
 
             <Button
                 android:id="@+id/btn_merge"
@@ -173,26 +173,52 @@
 
         </LinearLayout>
 
-        <!-- 第四行：书籍选择 -->
+        <!-- 第四行：书籍选择 + 搜索 + 刷新 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="8dp">
+            android:layout_marginBottom="4dp"
+            android:gravity="center_vertical">
 
-            <Spinner
-                android:id="@+id/spinner_book"
+            <!-- 书籍选择 / 搜索输入框（可切换） -->
+            <FrameLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="2"
-                android:layout_marginEnd="5dp"/>
+                android:layout_marginEnd="5dp">
+
+                <Spinner
+                    android:id="@+id/spinner_book"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"/>
+
+                <EditText
+                    android:id="@+id/et_search_keyword"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="输入关键词，多个用 | 分割"
+                    android:inputType="text"
+                    android:visibility="gone"
+                    android:imeOptions="actionDone"/>
+
+            </FrameLayout>
+
+            <ImageButton
+                android:id="@+id/btn_search"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="5dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="搜索"
+                android:padding="8dp"
+                android:src="@drawable/ic_search"/>
 
             <Button
                 android:id="@+id/btn_refresh"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:layout_marginStart="5dp"
                 android:text="刷新"
                 android:backgroundTint="#607D8B"
                 android:textColor="@android:color/white"/>
@@ -207,8 +233,8 @@
             android:text="角色列表 (单击标记/长按菜单):"
             android:textColor="@color/primaryText"
             android:textSize="14sp"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="8dp"/>
+            android:layout_marginTop="4dp"
+            android:layout_marginBottom="4dp"/>
 
     </LinearLayout>
 
@@ -218,6 +244,6 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:layout_marginTop="8dp"/>
+        android:layout_marginTop="4dp"/>
 
 </LinearLayout>

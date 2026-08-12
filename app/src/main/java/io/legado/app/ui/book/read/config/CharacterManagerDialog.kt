@@ -8,7 +8,10 @@ import android.content.SharedPreferences
 import android.graphics.Color
 import android.os.Bundle
 import android.preference.PreferenceManager
+import android.text.TextWatcher
 import android.view.Gravity
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -41,6 +44,8 @@ class CharacterManagerDialog : DialogFragment() {
     private lateinit var btnBackupRestore: Button
     private lateinit var btnManageBooks: Button
     private lateinit var btnRefresh: Button
+    private lateinit var btnSearch: ImageButton
+    private lateinit var etSearchKeyword: EditText
 
     private var currentBook = "默认"
     private var bookList = mutableListOf<String>()
@@ -49,6 +54,9 @@ class CharacterManagerDialog : DialogFragment() {
     private var selectedIndex = -1
     private var longPressedIndex = -1
     private var spinnerInitialized = false  // 用于防止Spinner初始化时触发切换
+    // 列表显示用的真实索引集合（筛选/搜索时只含命中项；无搜索时为全量索引）
+    private var displayList: MutableList<Int> = mutableListOf()
+    private var isSearchMode = false
 
     private lateinit var characterAdapter: CharacterAdapter
 
@@ -126,6 +134,28 @@ class CharacterManagerDialog : DialogFragment() {
         btnBackupRestore = rootView.findViewById(R.id.btn_backup_restore)
         btnManageBooks = rootView.findViewById(R.id.btn_manage_books)
         btnRefresh = rootView.findViewById(R.id.btn_refresh)
+        btnSearch = rootView.findViewById(R.id.btn_search)
+        etSearchKeyword = rootView.findViewById(R.id.et_search_keyword)
+
+        // 搜索模式切换：点搜索图标进入搜索（Spinner 变输入框），再次点击退出
+        btnSearch.setOnClickListener { toggleSearchMode() }
+
+        // 输入框实时筛选
+        etSearchKeyword.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                updateCharacterList()
+                updateLabel()
+            }
+        })
+        // 输入完成（回车/完成）收起键盘
+        etSearchKeyword.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+                hideKeyboard()
+                true
+            } else false
+        }
 
         // 初始化颜色（适配深色模式）
         initColors()
@@ -241,19 +271,28 @@ class CharacterManagerDialog : DialogFragment() {
         rvCharacters.isNestedScrollingEnabled = true
         
         characterAdapter.setOnItemClickListener { position ->
-            handleItemClick(position)
+            val realIndex = getRealIndex(position)
+            if (realIndex >= 0) handleItemClick(realIndex)
         }
 
         characterAdapter.setOnItemLongClickListener { position ->
-            handleItemLongClick(position)
+            val realIndex = getRealIndex(position)
+            if (realIndex >= 0) handleItemLongClick(realIndex)
             true
         }
 
         characterAdapter.setOnVoiceClickListener { position ->
-            handleVoiceClick(position)
+            val realIndex = getRealIndex(position)
+            if (realIndex >= 0) handleVoiceClick(realIndex)
         }
 
         updateCharacterList()
+    }
+
+    // 将列表中的位置映射回 characterRecords 中的真实索引
+    private fun getRealIndex(position: Int): Int {
+        if (position < 0 || position >= displayList.size) return -1
+        return displayList[position]
     }
 
     private fun handleItemClick(position: Int) {
@@ -342,11 +381,67 @@ class CharacterManagerDialog : DialogFragment() {
     }
 
     private fun updateCharacterList() {
+        // 根据当前搜索关键词重建显示列表（displayList 存 characterRecords 的真实索引）
+        val keyword = if (isSearchMode) {
+            etSearchKeyword.text?.toString()?.trim().orEmpty()
+        } else ""
+        val keywords = keyword.split("|").map { it.trim() }.filter { it.isNotEmpty() }
+
+        displayList.clear()
+        for (i in 0 until characterRecords.length()) {
+            val character = characterRecords.optJSONObject(i) ?: continue
+            if (keywords.isEmpty()) {
+                displayList.add(i)
+            } else {
+                // OR 匹配：主名或任一别名包含任一关键词（忽略大小写）即命中
+                val name = character.optString("name", "").lowercase()
+                val aliases = character.optString("aliases", "")
+                    .split("|").map { it.trim().lowercase() }
+                val hit = keywords.any { kw ->
+                    name.contains(kw) || aliases.any { it.contains(kw) }
+                }
+                if (hit) displayList.add(i)
+            }
+        }
         characterAdapter.notifyDataSetChanged()
     }
 
     private fun updateLabel() {
-        tvCharacterLabel.text = "角色列表 (已标记 ${markedIndices.size}):"
+        val matched = displayList.size
+        val total = characterRecords.length()
+        tvCharacterLabel.text = if (isSearchMode) {
+            "角色列表 (匹配 $matched / 共 $total，已标记 ${markedIndices.size}):"
+        } else {
+            "角色列表 (已标记 ${markedIndices.size}):"
+        }
+    }
+
+    // 进入/退出搜索模式：Spinner 与 搜索输入框 互斥显示
+    private fun toggleSearchMode() {
+        isSearchMode = !isSearchMode
+        if (isSearchMode) {
+            spinnerBook.visibility = View.GONE
+            etSearchKeyword.visibility = View.VISIBLE
+            etSearchKeyword.setText("")
+            etSearchKeyword.requestFocus()
+            showKeyboard(etSearchKeyword)
+        } else {
+            etSearchKeyword.visibility = View.GONE
+            spinnerBook.visibility = View.VISIBLE
+            hideKeyboard()
+        }
+        updateCharacterList()
+        updateLabel()
+    }
+
+    private fun showKeyboard(view: View) {
+        val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
+    }
+
+    private fun hideKeyboard() {
+        val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.hideSoftInputFromWindow(etSearchKeyword.windowToken, 0)
     }
 
     private fun setupListeners() {
@@ -568,15 +663,34 @@ class CharacterManagerDialog : DialogFragment() {
 
         val listView = dialog.findViewById<ListView>(R.id.lv_keys)
         val btnDelete = dialog.findViewById<Button>(R.id.btn_delete_key)
-        val btnModify = dialog.findViewById<Button>(R.id.btn_modify_key)
         val btnShowCurrent = dialog.findViewById<Button>(R.id.btn_show_current)
         val btnCancel = dialog.findViewById<Button>(R.id.btn_cancel)
 
-        // 设置列表数据
-        val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_list_item_1, names)
+        // 自定义适配器：每项右侧带“修改”图标
+        val adapter = object : ArrayAdapter<String>(
+            requireContext(),
+            R.layout.dialog_key_item,
+            R.id.tv_key_name,
+            names
+        ) {
+            override fun getView(position: Int, convertView: android.view.View?, parent: android.view.ViewGroup): android.view.View {
+                val view = convertView
+                    ?: layoutInflater.inflate(R.layout.dialog_key_item, parent, false)
+                val name = names[position]
+                val tv = view.findViewById<TextView>(R.id.tv_key_name)
+                tv.text = name
+                // 恢复原先的正常文字颜色，避免变浅看不清
+                tv.setTextColor(androidx.core.content.ContextCompat.getColor(requireContext(), R.color.primaryText))
+                view.findViewById<ImageButton>(R.id.btn_edit_key).setOnClickListener {
+                    dialog.dismiss()
+                    modifyKey(name)
+                }
+                return view
+            }
+        }
         listView.adapter = adapter
 
-        // 点击密钥恢复
+        // 点击密钥恢复（点击名称区域）
         listView.setOnItemClickListener { _, _, position, _ ->
             val name = names[position]
             val key = keyMap.optString(name, "")
@@ -590,10 +704,6 @@ class CharacterManagerDialog : DialogFragment() {
         btnDelete.setOnClickListener {
             dialog.dismiss()
             selectKeyToDelete()
-        }
-        btnModify.setOnClickListener {
-            dialog.dismiss()
-            selectKeyToModify()
         }
         btnShowCurrent.setOnClickListener {
             dialog.dismiss()
@@ -780,26 +890,52 @@ class CharacterManagerDialog : DialogFragment() {
         container.addView(keyLabel)
         container.addView(keyInput)
 
-        AlertDialog.Builder(requireContext())
+        val dialog = AlertDialog.Builder(requireContext())
             .setTitle("修改密钥")
             .setView(container)
-            .setPositiveButton("保存") { _, _ ->
-                val newName = nameInput.text?.toString()?.trim() ?: ""
-                val newKey = keyInput.text?.toString()?.trim() ?: ""
-                if (newName.isNotEmpty() && newKey.isNotEmpty()) {
-                    // 删除旧名称，添加新名称
-                    if (name != newName) {
-                        keyMap.remove(name)
-                    }
-                    keyMap.put(newName, newKey)
-                    saveKeyMap(keyMap)
-                    toast("已修改密钥: $newName")
-                } else {
-                    toast("名称和密钥内容都不能为空")
-                }
-            }
             .setNegativeButton("取消", null)
-            .show()
+            .create()
+
+        // 保存：仅更新 keys.json
+        dialog.setButton(AlertDialog.BUTTON_POSITIVE, "保存") { _, _ ->
+            applyModifyKey(keyMap, name, nameInput, keyInput, false)
+        }
+        // 保存并使用：更新 keys.json 并设为当前生效密钥（最右边）
+        dialog.setButton(AlertDialog.BUTTON_NEUTRAL, "保存并使用") { _, _ ->
+            applyModifyKey(keyMap, name, nameInput, keyInput, true)
+        }
+        dialog.show()
+    }
+
+    /**
+     * 执行密钥修改。
+     * @param use true 时除写入 keys.json 外，还将该密钥设为当前生效（写入 miyue.txt 与偏好）
+     */
+    private fun applyModifyKey(
+        keyMap: JSONObject,
+        oldName: String,
+        nameInput: TextInputEditText,
+        keyInput: TextInputEditText,
+        use: Boolean
+    ) {
+        val newName = nameInput.text?.toString()?.trim() ?: ""
+        val newKey = keyInput.text?.toString()?.trim() ?: ""
+        if (newName.isNotEmpty() && newKey.isNotEmpty()) {
+            if (oldName != newName) {
+                keyMap.remove(oldName)
+            }
+            keyMap.put(newName, newKey)
+            saveKeyMap(keyMap)
+            if (use) {
+                writeTxtFile("miyue.txt", newKey)
+                saveKeyToPrefs(newKey)
+                toast("已修改并启用密钥: $newName")
+            } else {
+                toast("已修改密钥: $newName")
+            }
+        } else {
+            toast("名称和密钥内容都不能为空")
+        }
     }
 
     private fun saveKeyMap(keyMap: JSONObject) {
@@ -1686,11 +1822,18 @@ class CharacterManagerDialog : DialogFragment() {
         }
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            val character = characterRecords.optJSONObject(position)
+            // position 是列表位置；只把列表位置传给 bind，真实索引统一在 bind 内换算
+            val realIndex = if (position in displayList.indices) displayList[position] else -1
+            val character = if (realIndex >= 0) characterRecords.optJSONObject(realIndex) else null
             holder.bind(character, position)
         }
 
-        override fun getItemCount(): Int = characterRecords.length()
+        // 供外部根据列表位置取真实索引
+        fun getRealIndex(position: Int): Int {
+            return if (position in displayList.indices) displayList[position] else -1
+        }
+
+        override fun getItemCount(): Int = displayList.size
 
         inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
             private val tvName: TextView = itemView.findViewById(R.id.tv_character_name)
@@ -1700,6 +1843,8 @@ class CharacterManagerDialog : DialogFragment() {
 
             fun bind(character: JSONObject?, position: Int) {
                 if (character == null) return
+                // position 参数为列表位置；换算成真实索引用于高亮判断
+                val realIndex = if (position in displayList.indices) displayList[position] else -1
 
                 val name = character.optString("name", "")
                 val aliasesStr = character.optString("aliases", "")
@@ -1735,9 +1880,9 @@ class CharacterManagerDialog : DialogFragment() {
                 // 固定标记 - 隐藏（不再显示✓）
                 ivFixed.visibility = View.GONE
 
-                // 背景颜色（适配深色模式）
-                val isMarked = markedIndices.contains(position)
-                val isSelected = position == selectedIndex
+                // 背景颜色（适配深色模式）—— marked/selected 均以真实索引为准
+                val isMarked = markedIndices.contains(realIndex)
+                val isSelected = realIndex == selectedIndex
                 val isDarkMode = (resources.configuration.uiMode and
                         android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
                         android.content.res.Configuration.UI_MODE_NIGHT_YES
@@ -1765,10 +1910,11 @@ class CharacterManagerDialog : DialogFragment() {
                     }
                 }
 
+                // 点击回调传列表位置，真实索引由 setupRecyclerView 的 getRealIndex 统一换算
                 itemView.setOnClickListener { onItemClick?.invoke(position) }
                 itemView.setOnLongClickListener { onItemLongClick?.invoke(position); true }
                 tvVoice.setOnClickListener { onVoiceClick?.invoke(position) }
-                tvName.setOnClickListener { previewCharacterVoice(position) }
+                tvName.setOnClickListener { previewCharacterVoice(realIndex) }
             }
         }
     }

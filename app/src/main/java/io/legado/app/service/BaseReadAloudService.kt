@@ -1089,12 +1089,7 @@ abstract class BaseReadAloudService : BaseService(),
 
     @CallSuper
     open fun pauseReadAloud(abandonFocus: Boolean = true) {
-        if (useWakeLock) {
-            wakeLock.release()
-        }
-        if (useWifiLock) {
-            wifiLock?.release()
-        }
+        wifiLock?.release()
         pause = true
         if (abandonFocus) {
             abandonFocus()

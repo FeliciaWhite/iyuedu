@@ -13,3 +13,7 @@ temp-xf50-clone/
 temp-xf35-source/
 build-release.log
 app/schemas/
+
+# Gradle 依赖缓存目录（含大量二进制缓存，不入库，仅保留打包文档）
+/依赖/*
+!/依赖/打包文档.md

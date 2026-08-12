@@ -6,9 +6,9 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
+import android.view.View
 import android.speech.tts.TextToSpeech
 import android.view.Gravity
-import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.graphics.Bitmap
@@ -369,10 +369,13 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
 
     /**
      * 根据「隐藏章节进度条」设置控制进度条可见性。
-     * 开关默认开启（hide=true）→ 去掉进度条；关闭 → 显示进度条。
+     * 开关默认开启（hide=true）→ 彻底移除进度条及其占用的空间（GONE），让图片更大；
+     * 关闭 → 显示进度条。
+     * 注意：不能用 visible(false)（那是 INVISIBLE，会保留空间）。
      */
     private fun applyChapterProgressVisibility() = binding.run {
-        llChapterProgress.visible(!AppConfig.readAloudHideChapterProgress)
+        llChapterProgress.visibility =
+            if (AppConfig.readAloudHideChapterProgress) View.GONE else View.VISIBLE
     }
 
     private fun initData() = binding.run {

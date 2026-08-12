@@ -69,6 +69,12 @@ class ReadView(context: Context, attrs: AttributeSet) :
     private var pressDown = false
     private var isMove = false
 
+    //底部上滑进入朗读界面手势
+    private var bottomSwipeUp = false
+    private val bottomSwipeSlop by lazy {
+        (height * 0.18f).coerceAtLeast(ViewConfiguration.get(context).scaledTouchSlop * 4f)
+    }
+
     //起始点
     var startX: Float = 0f
     var startY: Float = 0f
@@ -205,6 +211,7 @@ class ReadView(context: Context, attrs: AttributeSet) :
                 postDelayed(longPressRunnable, longPressTimeout)
                 pressDown = true
                 isMove = false
+                bottomSwipeUp = false
                 pageDelegate?.onTouch(event)
                 pageDelegate?.onDown()
                 setStartPoint(event.x, event.y, false)
@@ -220,6 +227,19 @@ class ReadView(context: Context, attrs: AttributeSet) :
                 if (isMove) {
                     longPressed = false
                     removeCallbacks(longPressRunnable)
+                    //非滚动翻页模式下，从屏幕底部区域向上滑动进入朗读界面
+                    if (!isScroll
+                        && !isTextSelected
+                        && !bottomSwipeUp
+                        && startY > height * 0.7f
+                        && event.y < startY - bottomSwipeSlop
+                        && absY > absX
+                    ) {
+                        bottomSwipeUp = true
+                        pageDelegate?.abortAnim()
+                        return true
+                    }
+                    if (bottomSwipeUp) return true
                     if (isTextSelected) {
                         selectText(event.x, event.y)
                     } else {
@@ -233,6 +253,10 @@ class ReadView(context: Context, attrs: AttributeSet) :
                 removeCallbacks(longPressRunnable)
                 if (!pressDown) return true
                 pressDown = false
+                if (bottomSwipeUp) {
+                    callBack.showReadAloudDialog()
+                    return true
+                }
                 if (!pageDelegate!!.isMoved && !isMove) {
                     if (!longPressed && !pressOnTextSelected) {
                         if (!curPage.onClick(startX, startY)) {
@@ -758,6 +782,7 @@ class ReadView(context: Context, attrs: AttributeSet) :
     interface CallBack {
         val isInitFinish: Boolean
         fun showActionMenu()
+        fun showReadAloudDialog()
         fun screenOffTimerStart()
         fun showTextActionMenu()
         fun autoPageStop()

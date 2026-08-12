@@ -302,10 +302,10 @@
             app:iconSpaceReserved="false" />
 
         <io.legado.app.lib.prefs.SwitchPreference
-            android:defaultValue="true"
+            android:defaultValue="false"
             android:title="@string/read_aloud_hide_status_bar_icons"
             android:summary="@string/read_aloud_hide_status_bar_icons_summary"
-            android:key="readAloudHideStatusBarIcons"
+            android:key="hideStatusBar"
             android:dependency="showReadAloudCoverSubtitle"
             app:iconSpaceReserved="false" />
 

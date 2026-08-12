@@ -242,8 +242,6 @@ object PreferKey {
     const val srtSubtitleTimeOffset = "srtSubtitleTimeOffset"
     const val srtSilenceMatchRange = "srtSilenceMatchRange"
     const val showReadAloudCoverSubtitle = "showReadAloudCoverSubtitle"
-    // 朗读大图全屏模式下是否隐藏状态栏图标（时间/电池等），默认 true 隐藏
-    const val readAloudHideStatusBarIcons = "readAloudHideStatusBarIcons"
     // 朗读界面是否隐藏当前章节进度条，默认 true 隐藏（开启即去掉进度条）
     const val readAloudHideChapterProgress = "readAloudHideChapterProgress"
     // 朗读界面小图（封面/本地图）与顶部的距离，单位 dp，默认 16

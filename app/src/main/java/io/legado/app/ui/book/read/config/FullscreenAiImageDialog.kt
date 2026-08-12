@@ -30,6 +30,7 @@ import io.legado.app.model.BookCover
 import io.legado.app.model.ReadBook
 import io.legado.app.ui.book.read.page.DialogRoleManager
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.loadGif
 import io.legado.app.utils.getPrefString
 import io.legado.app.utils.observeEvent
@@ -111,8 +112,8 @@ class FullscreenAiImageDialog : BaseDialogFragment(R.layout.dialog_fullscreen_im
             statusBarColor = Color.BLACK
             navigationBarColor = Color.BLACK
             WindowInsetsControllerCompat(this, decorView).apply {
-                // 状态栏图标是否隐藏，受朗读设置「隐藏状态栏图标」开关控制（默认隐藏）
-                if (AppConfig.readAloudHideStatusBarIcons) {
+                // 状态栏图标是否隐藏，受阅读界面「隐藏状态栏」开关控制（与朗读设置联动同步）
+                if (ReadBookConfig.hideStatusBar) {
                     hide(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
                 } else {
                     show(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())

@@ -25,6 +25,7 @@ import io.legado.app.constant.Status
 import io.legado.app.data.appDb
 import io.legado.app.databinding.DialogReadAloudBinding
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.loadGif
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.bottomBackground
@@ -277,7 +278,7 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
         dialog?.window?.run {
             clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setBackgroundDrawableResource(android.R.color.transparent)
-            val hideIcons = AppConfig.readAloudHideStatusBarIcons
+            val hideIcons = ReadBookConfig.hideStatusBar
             if (showImage) {
                 // 全屏延伸模式
                 decorView.setPadding(0, 0, 0, 0)

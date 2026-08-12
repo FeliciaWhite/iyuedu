@@ -986,11 +986,6 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefBoolean(PreferKey.showReadAloudCoverSubtitle, true)
         set(value) = appCtx.putPrefBoolean(PreferKey.showReadAloudCoverSubtitle, value)
 
-    // 朗读大图全屏模式下是否隐藏状态栏图标（时间/电池等），默认 true 隐藏
-    var readAloudHideStatusBarIcons: Boolean
-        get() = appCtx.getPrefBoolean(PreferKey.readAloudHideStatusBarIcons, true)
-        set(value) = appCtx.putPrefBoolean(PreferKey.readAloudHideStatusBarIcons, value)
-
     // 朗读界面是否隐藏当前章节进度条，默认 true 隐藏（开启即去掉进度条）
     var readAloudHideChapterProgress: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.readAloudHideChapterProgress, true)

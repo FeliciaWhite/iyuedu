@@ -43,7 +43,7 @@ object AiImageGenerator {
 
     const val CACHE_DIR_NAME = "ai_images"
     const val DEFAULT_STYLE_SUFFIX = "，超高清8K，有故事感，国风3DCG，皮肤质感真实细腻；柔和柔光打光，电影级细腻光影、皮肤次表面散射，细腻材质质感，氛围感清冷温柔，仙侠唯美，写实渲染，PBR材质，全局光照，极致画质，景深特写，高级冷调色调"
-    const val DEFAULT_PROMPT_TEMPLATE = "请根据以下小说片段，从中选取一个最有画面感、最精彩动人的场景，生成一张完整的场景插图：{mood}{text}{book}要求：1.必须是一个完整的场景画面（包含环境背景、空间氛围、人物位置关系、互动动作），不要只画人物特写或正面肖像；2.选取主角参与度最高、互动最丰富的瞬间；3.如果片段中有女性角色，优先选取主角与美女角色互动的场景，女性角色娇媚动人、美丽迷人；4.男性角色英姿飒爽、气宇轩昂。{style}"
+    const val DEFAULT_PROMPT_TEMPLATE = "请根据以下小说片段，从中选取一个最有画面感、最精彩动人的场景，生成一张完整的场景插图：{text}{book}要求：1.必须是一个完整的场景画面（包含环境背景、空间氛围、人物位置关系、互动动作），不要只画人物特写或正面肖像；2.选取主角参与度最高、互动最丰富的瞬间；3.如果片段中有女性角色，优先选取主角与美女角色互动的场景，女性角色娇媚动人、美丽迷人；4.男性角色英姿飒爽、气宇轩昂。{style}"
     const val DEFAULT_NEGATIVE_PROMPT = "凝重的眼神，愁眉苦脸，丑陋，畸形，低质量"
     const val DEFAULT_MODEL_URL = "https://api.siliconflow.cn/v1"
     const val DEFAULT_MODEL_NAME = "Kwai-Kolors/Kolors"
@@ -836,7 +836,6 @@ object AiImageGenerator {
         sourceText: String,
         bookName: String,
     ): String {
-        val moodDesc = if (mood.isNotBlank()) "场景氛围：$mood。" else ""
         // 角色标注：开启后，对发给 API 的正文做角色标注（与导出小说“添加标注”同源）
         val annotatedSourceText = if (template.annotateRoles) {
             annotateSourceText(sourceText)
@@ -852,7 +851,6 @@ object AiImageGenerator {
         val bookDesc = if (bookName.isNotBlank()) "出自小说《$bookName》。" else ""
 
         return template.promptTemplate
-            .replace("{mood}", moodDesc)
             .replace("{text}", textDesc)
             .replace("{book}", bookDesc)
             .replace("{style}", template.imageStyle)

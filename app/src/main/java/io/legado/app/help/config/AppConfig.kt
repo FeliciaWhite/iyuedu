@@ -1218,6 +1218,11 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefInt(PreferKey.aiImageCharCount, 200)
         set(value) = appCtx.putPrefInt(PreferKey.aiImageCharCount, value)
 
+    // AI 生图上下文字数（正文前/后的上文与后续字数，默认50，范围0~2000）
+    var aiImageContextCharCount: Int
+        get() = appCtx.getPrefInt(PreferKey.aiImageContextCharCount, 50).coerceIn(0, 2000)
+        set(value) = appCtx.putPrefInt(PreferKey.aiImageContextCharCount, value.coerceIn(0, 2000))
+
     // AI 生图重试次数（生图失败后重试次数，每次重试重新收集正文，默认1）
     var aiImageRetryCount: Int
         get() = appCtx.getPrefInt(PreferKey.aiImageRetryCount, 1)

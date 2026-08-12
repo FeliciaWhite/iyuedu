@@ -49,6 +49,7 @@ class AiImageSettingsDialog : BaseDialogFragment(0) {
     private lateinit var etNegativePrompt: EditText
     private lateinit var etFilterWords: EditText
     private lateinit var etCharCount: EditText
+    private lateinit var etContextCount: EditText
     private lateinit var etRetryCount: EditText
     private lateinit var etRequestInterval: EditText
 
@@ -225,25 +226,65 @@ class AiImageSettingsDialog : BaseDialogFragment(0) {
 
         // 启用AI生图开关已移动到「背景音乐设置」界面的「保存AI图片」上方（每本书单独设置），此处不再展示。
 
-        // 分析字数设置
+        // 分析字数 + 上下文字数（并排两列）
         labelWithHelp(
             "分析字数",
             "AI生图分析字数说明",
-            """每朗读多少字触发一次AI生图切换，同时也是每次提取正文的字数。
+            """每朗读多少字触发一次AI生图切换，同时也是每次提取「正文」的字数。
 
 【说明】
 1. 朗读进度每累计达到此字数，自动切换到下一张AI图片；
-2. 每次提取正文的长度也等于此字数；
+2. 每次提取的「正文」长度等于此字数；
 3. 默认200字，范围50~5000字；
 4. 首次开始朗读时立即生成第一张图片，之后每达到此字数切换一次；
 5. 切换前会提前预生成下一张图片，实现秒切无等待。"""
         )
+
+        val charCountRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            weightSum = 2f
+            setPadding(0, 0, 0, 4.dpToPx())
+        }
+
+        // 分析字数
+        val charCountWrap = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            setPadding(0, 0, 6.dpToPx(), 0)
+        }
         etCharCount = EditText(context).apply {
             inputType = InputType.TYPE_CLASS_NUMBER
             setText(AppConfig.aiImageCharCount.toString())
-            hint = "默认200，范围50~5000"
+            hint = "默认200，50~5000"
         }
-        root.addView(etCharCount)
+        charCountWrap.addView(etCharCount)
+        charCountWrap.addView(TextView(context).apply {
+            text = "正文分析字数"
+            textSize = 11f
+            setPadding(0, 2.dpToPx(), 0, 0)
+        })
+
+        // 上下文字数
+        val contextCountWrap = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            setPadding(6.dpToPx(), 0, 0, 0)
+        }
+        etContextCount = EditText(context).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER
+            setText(AppConfig.aiImageContextCharCount.toString())
+            hint = "默认50，0~2000"
+        }
+        contextCountWrap.addView(etContextCount)
+        contextCountWrap.addView(TextView(context).apply {
+            text = "上文/后续字数"
+            textSize = 11f
+            setPadding(0, 2.dpToPx(), 0, 0)
+        })
+
+        charCountRow.addView(charCountWrap)
+        charCountRow.addView(contextCountWrap)
+        root.addView(charCountRow)
 
         // 重试次数 + 请求间隔时间（并排两列）
         val rowRetryInterval = LinearLayout(context).apply {
@@ -378,8 +419,7 @@ sk-aaa@@sk-bbb@@sk-ccc
             """提示词模板会作为生成 AI 图片的指令发送给模型。可使用以下占位符，生成时会自动替换为实际内容：
 
 【占位符说明】
-{mood}  → 场景氛围：朗读时 BGM 模块按场景收集的氛围描述（如：宁静祥和）
-{text}  → 内容片段：小说正文片段（超过 350 字会自动截断）
+{text}  → 内容片段：小说正文片段（上文+正文+后续，超过 350 字会自动截断）
 {book}  → 书名：当前朗读的书名（替换为“出自小说《书名》。”）
 {style} → 风格后缀：即上方的“风格提示词后缀”设置项的值
 
@@ -688,10 +728,13 @@ sk-aaa@@sk-bbb@@sk-ccc
         }
         // 启用AI生图开关已迁移到背景音乐设置界面，这里不再修改该开关。
 
-        // 保存分析字数和重试次数
+        // 保存分析字数、上下文字数和重试次数
         val charCount = etCharCount.text?.toString()?.trim()?.toIntOrNull()
             ?.coerceIn(50, 5000) ?: 200
         AppConfig.aiImageCharCount = charCount
+        val contextCount = etContextCount.text?.toString()?.trim()?.toIntOrNull()
+            ?.coerceIn(0, 2000) ?: 50
+        AppConfig.aiImageContextCharCount = contextCount
         val retryCount = etRetryCount.text?.toString()?.trim()?.toIntOrNull()
             ?.coerceIn(0, 5) ?: 1
         AppConfig.aiImageRetryCount = retryCount

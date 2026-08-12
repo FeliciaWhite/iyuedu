@@ -1892,10 +1892,81 @@ abstract class BaseReadAloudService : BaseService(),
      * 从当前段落开始收集AI生图用的正文内容
      * 提取字数由 aiImageCharCount 决定（默认200字）
      */
+    /**
+     * 收集发给 AI 生图的小说内容，组织为「上文 / 正文 / 后续」三段。
+     * - 正文：从当前朗读段落 [nowSpeak] 起累计 [aiImageCharCount] 字；
+     * - 上文：正文之前累计 [aiImageContextCharCount] 字（当前章内向前取）；
+     * - 后续：正文结束段之后累计 [aiImageContextCharCount] 字。
+     * 三段均为纯正文（书籍信息由提示词模板 {book} 提供），便于角色标注与上下文衔接。
+     */
     internal fun collectContentForAiImage(): String? {
-        val charCount = AppConfig.aiImageCharCount.coerceIn(50, 5000)
-        return collectContentFromParagraphWithCharCount(nowSpeak, charCount)
+        val centerChars = AppConfig.aiImageCharCount.coerceIn(50, 5000)
+        val contextChars = AppConfig.aiImageContextCharCount
+        val start = nowSpeak.coerceAtLeast(0)
+
+        // 正文：从 start 起累计 centerChars 字
+        val bodyResult = collectPlainText(start, centerChars)
+        val bodyText = bodyResult.text
+        val bodyEndIndex = bodyResult.endIndex
+
+        // 上文：从 start 之前向前累计 contextChars 字
+        val preText = if (contextChars > 0) collectBackwardText(start - 1, contextChars) else ""
+
+        // 后续：从正文结束段之后继续累计 contextChars 字
+        val postText = if (contextChars > 0) {
+            collectPlainText(bodyEndIndex + 1, contextChars).text
+        } else ""
+
+        val sb = StringBuilder()
+        sb.append("【上文】\n")
+        sb.append(preText.ifBlank { "（无）" })
+        sb.append("\n\n【正文内容】\n")
+        sb.append(bodyText.ifBlank { "（无）" })
+        sb.append("\n\n【后续】\n")
+        sb.append(postText.ifBlank { "（无）" })
+
+        return sb.toString().takeIf { it.isNotBlank() }
     }
+
+    /**
+     * 从指定段落向前（索引递减）累计 targetChars 字，返回拼接的正文。
+     * 仅取当前章 [contentList] 中 startBeforeIndex 之前的段落。
+     */
+    private fun collectBackwardText(startBeforeIndex: Int, targetChars: Int): String {
+        if (startBeforeIndex < 0) return ""
+        val sb = StringBuilder()
+        var count = 0
+        for (i in startBeforeIndex downTo 0) {
+            val paragraph = contentList.getOrNull(i) ?: break
+            if (paragraph.isNullOrBlank() || paragraph.matches(AppPattern.notReadAloudRegex)) continue
+            sb.insert(0, paragraph + "\n")
+            count += paragraph.length + 1
+            if (count >= targetChars) break
+        }
+        return sb.toString().trim()
+    }
+
+    /**
+     * 从 startIndex 起收集纯正文（不含书籍信息头），累计 targetChars 字。
+     * 返回正文文本与结束段落索引（用于推算后续起点）。
+     */
+    private fun collectPlainText(startIndex: Int, targetChars: Int): PlainTextResult {
+        val sb = StringBuilder()
+        var count = 0
+        var endIndex = startIndex.coerceAtLeast(0)
+        for (i in startIndex until contentList.size) {
+            val paragraph = contentList[i]
+            if (paragraph.isNullOrBlank() || paragraph.matches(AppPattern.notReadAloudRegex)) continue
+            sb.append(paragraph).append("\n")
+            count += paragraph.length + 1
+            endIndex = i
+            if (count >= targetChars) break
+        }
+        return PlainTextResult(sb.toString().trim(), endIndex)
+    }
+
+    private data class PlainTextResult(val text: String, val endIndex: Int)
+
 
     /**
      * 从指定段落开始收集正文，提取指定字数

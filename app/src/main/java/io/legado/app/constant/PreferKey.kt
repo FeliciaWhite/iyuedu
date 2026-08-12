@@ -300,6 +300,8 @@ object PreferKey {
     const val aiImageLastEditTemplateId = "aiImageLastEditTemplateId"
     // AI 生图分析字数（每读多少字触发一次，默认200）
     const val aiImageCharCount = "aiImageCharCount"
+    // AI 生图上下文字数（正文前/后的上文与后续字数，默认50）
+    const val aiImageContextCharCount = "aiImageContextCharCount"
     // AI 生图重试次数（生图失败后重试次数，默认1）
     const val aiImageRetryCount = "aiImageRetryCount"
     // AI 生图请求间隔时间（秒，每次请求与重试前等待，避免触发 API 频率限制，默认1.0）

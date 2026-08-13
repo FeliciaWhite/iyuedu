@@ -305,16 +305,23 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
                     isAppearanceLightNavigationBars = true
                 }
             } else {
-                // 底部面板模式：窗口仅包裹底部面板高度，上半部分不在窗口内，
-                // 自然露出下层阅读页文字且触摸归 Activity，不遮挡、不拦截
-                WindowCompat.setDecorFitsSystemWindows(this, true)
+                // 底部面板模式：整屏透明窗口 + 仅底部 content_panel 有背景。
+                // 1) MATCH_PARENT 让窗口覆盖整屏，手指从下往上滑动全程在窗口内，
+                //    手势序列不会被"滑出 WRAP_CONTENT 窗口"而打断，上滑可触发。
+                // 2) FLAG_NOT_TOUCH_MODAL + 根布局透明（无子 View 命中透明区），
+                //    使上方透明区域触摸透传给下层阅读页，阅读文字仍可点击/翻页，不遮挡。
+                // 3) 不加 FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS，避免整屏绘制背景导致白屏。
+                WindowCompat.setDecorFitsSystemWindows(this, false)
                 clearFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-                clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL)
+                addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL)
+                statusBarColor = Color.TRANSPARENT
+                navigationBarColor = Color.TRANSPARENT
                 val attr = attributes
                 attr.gravity = Gravity.BOTTOM
                 attr.dimAmount = 0.0f
+                attr.flags = attr.flags and WindowManager.LayoutParams.FLAG_DIM_BEHIND.inv()
                 attributes = attr
-                setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             }
         }
     }
@@ -374,35 +381,65 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
     }
 
     /**
-     * 朗读界面从上向下滑动退出，全屏（开启封面字幕）与半屏（关闭封面字幕）均生效。
-     * 半屏模式下额外让根布局不拦截触摸，确保上方原文阅读区可正常操作。
+     * 朗读界面手势：
+     * - 从上向下滑动退出（全屏与半屏均生效）；
+     * - 半屏模式下，从下向上滑动进入全屏朗读界面，并同时开始/恢复朗读。
+     * 手势监听挂载到 Window 根（decorView），覆盖全屏范围；返回 false 不消费事件，
+     * 子 View（按钮等）与下层阅读区照常响应。
      */
     @SuppressLint("ClickableViewAccessibility")
     private fun initSwipeToDismiss() {
         val touchSlop = ViewConfiguration.get(requireContext()).scaledTouchSlop
+        var accumDy = 0f
         val gestureDetector = GestureDetector(requireContext(), object : GestureDetector.SimpleOnGestureListener() {
-            override fun onFling(
+            override fun onDown(e: MotionEvent): Boolean {
+                accumDy = 0f
+                return true
+            }
+
+            // 用 onScroll 累积位移判断，不依赖 fling 速度，慢速滑动也能触发
+            override fun onScroll(
                 e1: MotionEvent?,
                 e2: MotionEvent,
-                velocityX: Float,
-                velocityY: Float
+                distanceX: Float,
+                distanceY: Float
             ): Boolean {
-                if (e1 == null) return false
-                val dy = e2.y - e1.y
-                val dx = abs(e2.x - e1.x)
-                // 向下滑动且纵向位移明显大于横向、位移超过阈值
-                if (dy > touchSlop * 4 && dy > dx * 1.5f) {
+                accumDy += -distanceY // 上滑 distanceY<0 → 累加正；下滑 distanceY>0 → 累加负
+                // 半屏模式下，向上滑动达到阈值 → 进入全屏并开始朗读
+                if (!AppConfig.showReadAloudCoverSubtitle && accumDy > touchSlop * 3) {
+                    accumDy = 0f
+                    enterFullscreenAndReadAloud()
+                    return true
+                }
+                // 任意模式向下滑动达到阈值 → 退出
+                if (accumDy < -touchSlop * 3) {
+                    accumDy = 0f
                     dismiss()
                     return true
                 }
                 return false
             }
         })
-        // 监听挂载到 Window 根（decorView），覆盖全屏范围；返回 false 不消费事件，
-        // 子 View（按钮等）与下层阅读区照常响应，仅识别为向下滑动时由 dismiss() 退出
         dialog?.window?.decorView?.setOnTouchListener { _, event ->
             gestureDetector.onTouchEvent(event)
             false
+        }
+    }
+
+    /**
+     * 半屏模式下从下向上滑动触发：切换到全屏朗读界面，并同时开始/恢复朗读。
+     */
+    private fun enterFullscreenAndReadAloud() {
+        if (AppConfig.showReadAloudCoverSubtitle) return
+        // 1. 开启封面字幕面板开关，使窗口模式切为全屏延伸
+        AppConfig.showReadAloudCoverSubtitle = true
+        // 2. 切换窗口为全屏模式，并刷新上半部分（封面/字幕/进度条）
+        applyWindowMode(true)
+        upTopSection()
+        // 3. 同时开始/恢复朗读
+        when {
+            !BaseReadAloudService.isRun -> ReadAloud.play(requireContext())
+            BaseReadAloudService.pause -> ReadAloud.resume(requireContext())
         }
     }
 

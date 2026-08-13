@@ -488,27 +488,12 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
         val show = BaseReadAloudService.isRun && AppConfig.showReadAloudCoverSubtitle
         llReadAloudTop.visible(show)
         if (show) {
-            // 1. 计算屏幕可用高度，确保图片不会挤掉下方内容
-            val screenHeight = resources.displayMetrics.heightPixels
-            val density = resources.displayMetrics.density
-            // 估算下方固定内容（按钮、语速控制等）所需最小高度约 340dp
-            val minBottomHeightPx = (340 * density).toInt()
-            // 预留上下边距和标题区域约 60dp
-            val reservedPx = (60 * density).toInt()
-            val maxImageHeightPx = (screenHeight - minBottomHeightPx - reservedPx).coerceAtLeast((120 * density).toInt())
-
-            // 2. 用户设定尺寸
+            // 用户设定尺寸：不再限制图片最大高度，图片完全按设定宽度与比例显示，可设得更大。
+            // llReadAloudTop 使用 layout_weight=1 自动占据屏幕剩余空间，下方内容不会被挤掉。
             val widthDp = AppConfig.readAloudCoverWidth.coerceIn(80, 600)
             val heightDp = (widthDp * 340f / 240f).toInt()
-            var widthPx = widthDp.dpToPx()
-            var heightPx = heightDp.dpToPx()
-
-            // 3. 如果计算高度超出可用空间，按比例自适应缩小
-            if (heightPx > maxImageHeightPx) {
-                val ratio = widthPx.toFloat() / heightPx
-                heightPx = maxImageHeightPx
-                widthPx = (heightPx * ratio).toInt()
-            }
+            val widthPx = widthDp.dpToPx()
+            val heightPx = heightDp.dpToPx()
 
             ivBookCover.layoutParams = ivBookCover.layoutParams.apply {
                 width = widthPx

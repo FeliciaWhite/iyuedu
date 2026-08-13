@@ -24,7 +24,7 @@
         android:background="@color/background_menu"
         android:orientation="vertical"
         android:paddingLeft="16dp"
-        android:paddingTop="6dp"
+        android:paddingTop="0dp"
         android:paddingRight="16dp"
         android:paddingBottom="6dp">
 

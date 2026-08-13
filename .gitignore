@@ -14,6 +14,9 @@ temp-xf35-source/
 build-release.log
 app/schemas/
 
-# Gradle 依赖缓存目录（含大量二进制缓存，不入库，仅保留打包文档）
+# Gradle 依赖缓存目录（含大量二进制缓存，不入库）
 /依赖/*
+# 但保留离线 SDK 安装包与打包文档
+!/依赖/sdk-packages/
+!/依赖/sdk-packages/**
 !/依赖/打包文档.md

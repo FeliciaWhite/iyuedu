@@ -442,7 +442,8 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
             }
             val textPage = relativePage(relativePos)
             for (textLine in textPage.lines) {
-                if (!textLine.isTouch(x, y, relativeOffset)) continue
+                // 仅按 y 命中该行即可进入删除检测，x 范围在下方单独放宽到屏幕左边缘
+                if (!textLine.isTouchY(y, relativeOffset)) continue
                 // 检测缩进字符，在缩进上方区域响应点击（区域扩大）
                 val indentColumns = textLine.columns.filter {
                     it is TextColumn && it.charData == ChapterProvider.indentChar
@@ -453,7 +454,9 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
                 val radius = 4.dpToPx() + 16.dpToPx() // 扩大点击区域
                 val cx = (firstIndent.start + lastIndent.end) / 2
                 val cy = textLine.lineTop + relativeOffset - 4.dpToPx() - 2.dpToPx()
-                if (x < cx - radius || x > cx + radius
+                // 点击范围向左拓展到屏幕左边缘，向右到缩进中心+radius，
+                // 整行左侧任意位置点击即可触发删除，更易点击。
+                if (x < visibleRect.left || x > cx + radius
                     || y < cy - radius || y > cy + radius
                 ) {
                     continue

@@ -72,7 +72,7 @@ class ReadView(context: Context, attrs: AttributeSet) :
     //底部上滑进入朗读界面手势
     private var bottomSwipeUp = false
     private val bottomSwipeSlop by lazy {
-        (height * 0.18f).coerceAtLeast(ViewConfiguration.get(context).scaledTouchSlop * 4f)
+        (height * 0.08f).coerceAtLeast(ViewConfiguration.get(context).scaledTouchSlop * 4f)
     }
 
     //起始点
@@ -227,13 +227,13 @@ class ReadView(context: Context, attrs: AttributeSet) :
                 if (isMove) {
                     longPressed = false
                     removeCallbacks(longPressRunnable)
-                    //非滚动翻页模式下，从屏幕底部区域向上滑动进入朗读界面
+                    //非滚动翻页模式下，从屏幕下半部分（竖直中线以下）任意位置向上滑动进入朗读界面
                     if (!isScroll
                         && !isTextSelected
                         && !bottomSwipeUp
-                        && startY > height * 0.7f
+                        && startY > height * 0.5f
                         && event.y < startY - bottomSwipeSlop
-                        && absY > absX
+                        && absY >= absX * 0.9f
                     ) {
                         bottomSwipeUp = true
                         pageDelegate?.abortAnim()
@@ -415,6 +415,10 @@ class ReadView(context: Context, attrs: AttributeSet) :
      * 单击
      */
     private fun onSingleTapUp() {
+        // 开启音频缓存标记后，禁用左右两侧点击翻页（翻页改用滑动），
+        // 避免点击删除图标/小喇叭时手指偏移被误判为翻页。
+        // 中央区域与顶部中间仍执行原点击动作；图标点击由 ContentTextView 优先处理。
+        val clickPageByTap = !AppConfig.showAudioCacheIndicator
         when {
             isTextSelected -> Unit
             mcRect.contains(startX, startY) -> if (!isAbortAnim) {
@@ -425,23 +429,23 @@ class ReadView(context: Context, attrs: AttributeSet) :
                 click(AppConfig.clickActionBC)
             }
 
-            blRect.contains(startX, startY) -> {
+            blRect.contains(startX, startY) -> if (clickPageByTap) {
                 click(AppConfig.clickActionBL)
             }
 
-            brRect.contains(startX, startY) -> {
+            brRect.contains(startX, startY) -> if (clickPageByTap) {
                 click(AppConfig.clickActionBR)
             }
 
-            mlRect.contains(startX, startY) -> {
+            mlRect.contains(startX, startY) -> if (clickPageByTap) {
                 click(AppConfig.clickActionML)
             }
 
-            mrRect.contains(startX, startY) -> {
+            mrRect.contains(startX, startY) -> if (clickPageByTap) {
                 click(AppConfig.clickActionMR)
             }
 
-            tlRect.contains(startX, startY) -> {
+            tlRect.contains(startX, startY) -> if (clickPageByTap) {
                 click(AppConfig.clickActionTL)
             }
 
@@ -449,7 +453,7 @@ class ReadView(context: Context, attrs: AttributeSet) :
                 click(AppConfig.clickActionTC)
             }
 
-            trRect.contains(startX, startY) -> {
+            trRect.contains(startX, startY) -> if (clickPageByTap) {
                 click(AppConfig.clickActionTR)
             }
         }

@@ -11,6 +11,8 @@ import android.speech.tts.TextToSpeech
 import android.view.Gravity
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.view.ViewConfiguration
+import kotlin.math.abs
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.drawable.Drawable
@@ -303,9 +305,11 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
                     isAppearanceLightNavigationBars = true
                 }
             } else {
-                // 底部面板模式：只占下半部分，状态栏由 Activity 接管，不遮原文
+                // 底部面板模式：窗口仅包裹底部面板高度，上半部分不在窗口内，
+                // 自然露出下层阅读页文字且触摸归 Activity，不遮挡、不拦截
                 WindowCompat.setDecorFitsSystemWindows(this, true)
                 clearFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+                clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL)
                 val attr = attributes
                 attr.gravity = Gravity.BOTTOM
                 attr.dimAmount = 0.0f
@@ -366,6 +370,40 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
         applyChapterProgressVisibility()
         initData()
         initEvent()
+        initSwipeToDismiss()
+    }
+
+    /**
+     * 朗读界面从上向下滑动退出，全屏（开启封面字幕）与半屏（关闭封面字幕）均生效。
+     * 半屏模式下额外让根布局不拦截触摸，确保上方原文阅读区可正常操作。
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun initSwipeToDismiss() {
+        val touchSlop = ViewConfiguration.get(requireContext()).scaledTouchSlop
+        val gestureDetector = GestureDetector(requireContext(), object : GestureDetector.SimpleOnGestureListener() {
+            override fun onFling(
+                e1: MotionEvent?,
+                e2: MotionEvent,
+                velocityX: Float,
+                velocityY: Float
+            ): Boolean {
+                if (e1 == null) return false
+                val dy = e2.y - e1.y
+                val dx = abs(e2.x - e1.x)
+                // 向下滑动且纵向位移明显大于横向、位移超过阈值
+                if (dy > touchSlop * 4 && dy > dx * 1.5f) {
+                    dismiss()
+                    return true
+                }
+                return false
+            }
+        })
+        // 监听挂载到 Window 根（decorView），覆盖全屏范围；返回 false 不消费事件，
+        // 子 View（按钮等）与下层阅读区照常响应，仅识别为向下滑动时由 dismiss() 退出
+        dialog?.window?.decorView?.setOnTouchListener { _, event ->
+            gestureDetector.onTouchEvent(event)
+            false
+        }
     }
 
     /**

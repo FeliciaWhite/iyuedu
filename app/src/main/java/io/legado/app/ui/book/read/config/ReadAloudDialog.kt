@@ -305,23 +305,18 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
                     isAppearanceLightNavigationBars = true
                 }
             } else {
-                // 底部面板模式：整屏透明窗口 + 仅底部 content_panel 有背景。
-                // 1) MATCH_PARENT 让窗口覆盖整屏，手指从下往上滑动全程在窗口内，
-                //    手势序列不会被"滑出 WRAP_CONTENT 窗口"而打断，上滑可触发。
-                // 2) FLAG_NOT_TOUCH_MODAL + 根布局透明（无子 View 命中透明区），
-                //    使上方透明区域触摸透传给下层阅读页，阅读文字仍可点击/翻页，不遮挡。
-                // 3) 不加 FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS，避免整屏绘制背景导致白屏。
-                WindowCompat.setDecorFitsSystemWindows(this, false)
+                // 底部面板模式：窗口仅包裹底部面板（WRAP_CONTENT），
+                // 上半部分不在窗口内，自然露出下层阅读页文字且触摸归 Activity，不遮挡、不拦截。
+                // 上滑"进入全屏"手势在底部面板区域内完成（面板本身有高度，
+                // 上滑一小段即触发），无需把窗口改成整屏，避免整屏白底遮挡文字。
+                WindowCompat.setDecorFitsSystemWindows(this, true)
                 clearFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-                addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL)
-                statusBarColor = Color.TRANSPARENT
-                navigationBarColor = Color.TRANSPARENT
+                clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL)
                 val attr = attributes
                 attr.gravity = Gravity.BOTTOM
                 attr.dimAmount = 0.0f
-                attr.flags = attr.flags and WindowManager.LayoutParams.FLAG_DIM_BEHIND.inv()
                 attributes = attr
-                setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             }
         }
     }

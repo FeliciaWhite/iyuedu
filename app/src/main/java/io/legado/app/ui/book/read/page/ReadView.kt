@@ -71,6 +71,8 @@ class ReadView(context: Context, attrs: AttributeSet) :
 
     //底部上滑进入朗读界面手势
     private var bottomSwipeUp = false
+    //顶部下滑停止朗读手势（仅朗读中生效）
+    private var topSwipeDown = false
     private val bottomSwipeSlop by lazy {
         (height * 0.08f).coerceAtLeast(ViewConfiguration.get(context).scaledTouchSlop * 4f)
     }
@@ -212,6 +214,7 @@ class ReadView(context: Context, attrs: AttributeSet) :
                 pressDown = true
                 isMove = false
                 bottomSwipeUp = false
+                topSwipeDown = false
                 pageDelegate?.onTouch(event)
                 pageDelegate?.onDown()
                 setStartPoint(event.x, event.y, false)
@@ -231,7 +234,7 @@ class ReadView(context: Context, attrs: AttributeSet) :
                     if (!isScroll
                         && !isTextSelected
                         && !bottomSwipeUp
-                        && startY > height * 0.5f
+                        && startY > height * 0.333f
                         && event.y < startY - bottomSwipeSlop
                         && absY >= absX * 0.9f
                     ) {
@@ -240,6 +243,20 @@ class ReadView(context: Context, attrs: AttributeSet) :
                         return true
                     }
                     if (bottomSwipeUp) return true
+                    //非滚动翻页模式下，从屏幕上半部分（竖直中线以上）任意位置向下滑动停止朗读
+                    if (!isScroll
+                        && !isTextSelected
+                        && !topSwipeDown
+                        && !bottomSwipeUp
+                        && startY < height * 0.667f
+                        && event.y > startY + bottomSwipeSlop
+                        && absY >= absX * 0.9f
+                    ) {
+                        topSwipeDown = true
+                        pageDelegate?.abortAnim()
+                        return true
+                    }
+                    if (topSwipeDown) return true
                     if (isTextSelected) {
                         selectText(event.x, event.y)
                     } else {
@@ -255,6 +272,12 @@ class ReadView(context: Context, attrs: AttributeSet) :
                 pressDown = false
                 if (bottomSwipeUp) {
                     callBack.showReadAloudDialog()
+                    return true
+                }
+                if (topSwipeDown) {
+                    if (BaseReadAloudService.isRun) {
+                        ReadAloud.stop(context)
+                    }
                     return true
                 }
                 if (!pageDelegate!!.isMoved && !isMove) {

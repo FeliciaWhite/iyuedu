@@ -20,3 +20,4 @@ app/schemas/
 !/依赖/sdk-packages/
 !/依赖/sdk-packages/**
 !/依赖/打包文档.md
+build_release.log

@@ -63,6 +63,7 @@ import io.legado.app.utils.postEvent
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -84,6 +85,10 @@ abstract class BaseReadAloudService : BaseService(),
         @JvmStatic
         var isRun = false
             private set
+
+        /** 朗读运行状态流，供书架等界面观察以实时刷新耳机/停止按钮状态 */
+        @JvmStatic
+        val isRunFlow = MutableStateFlow(false)
 
         @JvmStatic
         var pause = true
@@ -872,6 +877,7 @@ abstract class BaseReadAloudService : BaseService(),
         super.onCreate()
         instance = this
         isRun = true
+        isRunFlow.value = true
         pause = false
         observeLiveBus()
         initMediaSession()
@@ -950,6 +956,7 @@ abstract class BaseReadAloudService : BaseService(),
             wifiLock?.release()
         }
         isRun = false
+        isRunFlow.value = false
         pause = true
         instance = null
         abandonFocus()
@@ -1084,6 +1091,7 @@ abstract class BaseReadAloudService : BaseService(),
             wifiLock?.acquire()
         }
         isRun = true
+        isRunFlow.value = true
         pause = false
         needResumeOnAudioFocusGain = false
         needResumeOnCallStateIdle = false

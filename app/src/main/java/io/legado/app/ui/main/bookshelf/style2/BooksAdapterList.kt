@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Bundle
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
+import io.legado.app.constant.BookType
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.databinding.ItemBookshelfList2Binding
@@ -11,6 +12,7 @@ import io.legado.app.databinding.ItemBookshelfListBinding
 import io.legado.app.databinding.ItemBookshelfListGroupBinding
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.config.AppConfig
+import io.legado.app.utils.startActivityForBook
 import io.legado.app.utils.gone
 import io.legado.app.utils.invisible
 import io.legado.app.utils.visible
@@ -67,6 +69,10 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
             ivAuthor.visible()
             ivLast.visible()
             ivRead.visible()
+            // 仅支持朗读的书（非音频/图片/视频）显示耳机按钮
+            ivReadAloud.visible(
+                item.type and (BookType.audio or BookType.image or BookType.video) == 0
+            )
             upRefresh(this, item)
         }
 
@@ -100,6 +106,14 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
             }
             binding.root.onLongClick {
                 callBack.onItemLongClick(item)
+            }
+            binding.ivReadAloud.setOnClickListener {
+                // 点击耳机按钮：打开该书并直接开始朗读
+                (item as Book).let { book ->
+                    itemView.context.startActivityForBook(book) {
+                        putExtra("readAloud", true)
+                    }
+                }
             }
         }
 

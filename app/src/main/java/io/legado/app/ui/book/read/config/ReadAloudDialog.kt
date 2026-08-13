@@ -87,6 +87,8 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
     /** AI 生图历史浏览：当前显示的历史图片索引（在 aiHistoryImages 中的位置） */
     private var aiHistoryImages: List<File> = emptyList()
     private var aiHistoryIndex = -1
+    /** 当前窗口是否为全屏模式（由 applyWindowMode 维护）；用于手势判定半屏专属操作 */
+    private var isFullscreen = false
     /** 浏览历史图片后，30秒无操作自动回到最新图片的定时器 */
     private var aiHistoryResetTimer: Timer? = null
 
@@ -280,6 +282,7 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
         dialog?.window?.run {
             clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setBackgroundDrawableResource(android.R.color.transparent)
+            isFullscreen = showImage
             val hideIcons = ReadBookConfig.hideStatusBar
             if (showImage) {
                 // 全屏延伸模式
@@ -376,40 +379,59 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
     }
 
     /**
-     * 朗读界面手势：
-     * - 从上向下滑动退出（全屏与半屏均生效）；
-     * - 半屏模式下，从下向上滑动进入全屏朗读界面，并同时开始/恢复朗读。
-     * 手势监听挂载到 Window 根（decorView），覆盖全屏范围；返回 false 不消费事件，
+     * 朗读界面手势（半屏模式）：
+     * - 从下往上滑动（dy<0）→ 开始/恢复朗读（与"开始朗读"按钮行为一致，不进全屏）；
+     * - 从上往下滑动（dy>0）→ 退出朗读界面；
+     * - 左右滑动（横向位移 > 纵向且过阈值）→ 翻页（左滑下一页，右滑上一页），
+     *   因为半屏模式上层 Dialog 模态拦截了下层阅读页，无法直接点字翻页，故在此提供手势翻页。
+     * 手势监听挂载到 Window 根（decorView）；返回 false 不消费事件，
      * 子 View（按钮等）与下层阅读区照常响应。
      */
     @SuppressLint("ClickableViewAccessibility")
     private fun initSwipeToDismiss() {
         val touchSlop = ViewConfiguration.get(requireContext()).scaledTouchSlop
+        var startX = 0f
         var startY = 0f
+        var handled = false
         val gestureDetector = GestureDetector(requireContext(), object : GestureDetector.SimpleOnGestureListener() {
             override fun onDown(e: MotionEvent): Boolean {
+                startX = e.x
                 startY = e.y
+                handled = false
                 return true
             }
 
-            // 用 e2.y - startY 的绝对位移判断（不依赖 distanceY 符号，避免方向歧义）：
-            // dy < 0 → 手指上移（从下往上滑）→ 半屏进全屏；
-            // dy > 0 → 手指下移（从上往下滑）→ 退出。
+            // 用 e2 - start 的绝对位移判断方向（避免 distanceY 符号歧义）：
+            // dy < 0 → 手指从下往上； dy > 0 → 手指从上往下；
+            // |dx| > |dy| 且超过阈值 → 左右滑动翻页。
             override fun onScroll(
                 e1: MotionEvent?,
                 e2: MotionEvent,
                 distanceX: Float,
                 distanceY: Float
             ): Boolean {
+                if (handled) return false
                 val dy = e2.y - startY
-                // 半屏模式下，从下往上滑动达到阈值 → 进入全屏并开始朗读
-                if (!AppConfig.showReadAloudCoverSubtitle && dy < -touchSlop * 3) {
-                    enterFullscreenAndReadAloud()
-                    return true
+                val dx = e2.x - startX
+                // 以下为半屏模式专属手势（全屏模式下层阅读页本就可点，不拦截）
+                if (!isFullscreen) {
+                    // 1. 左右滑动翻页：左滑下一页，右滑上一页
+                    if (abs(dx) > abs(dy) && abs(dx) > touchSlop * 3) {
+                        if (dx < 0) ReadBook.moveToNextPage() else ReadBook.moveToPrevPage()
+                        handled = true
+                        return true
+                    }
+                    // 2. 从下往上滑动 → 开始/恢复朗读（复用"开始朗读"按钮逻辑）
+                    if (dy < -touchSlop * 3) {
+                        callBack?.onClickReadAloud()
+                        handled = true
+                        return true
+                    }
                 }
-                // 任意模式从上往下滑动达到阈值 → 退出
+                // 3. 从上往下滑动 → 退出（任意模式生效）
                 if (dy > touchSlop * 3) {
                     dismiss()
+                    handled = true
                     return true
                 }
                 return false
@@ -418,23 +440,6 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
         dialog?.window?.decorView?.setOnTouchListener { _, event ->
             gestureDetector.onTouchEvent(event)
             false
-        }
-    }
-
-    /**
-     * 半屏模式下从下向上滑动触发：切换到全屏朗读界面，并同时开始/恢复朗读。
-     */
-    private fun enterFullscreenAndReadAloud() {
-        if (AppConfig.showReadAloudCoverSubtitle) return
-        // 1. 开启封面字幕面板开关，使窗口模式切为全屏延伸
-        AppConfig.showReadAloudCoverSubtitle = true
-        // 2. 切换窗口为全屏模式，并刷新上半部分（封面/字幕/进度条）
-        applyWindowMode(true)
-        upTopSection()
-        // 3. 同时开始/恢复朗读
-        when {
-            !BaseReadAloudService.isRun -> ReadAloud.play(requireContext())
-            BaseReadAloudService.pause -> ReadAloud.resume(requireContext())
         }
     }
 

@@ -1,30 +1,29 @@
-To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
-Daemon will be stopped at the end of the build 
+nohup: 忽略输入
+> Task :app:preBuild UP-TO-DATE
 > Task :modules:rhino:preBuild UP-TO-DATE
 > Task :modules:book:preBuild UP-TO-DATE
-> Task :app:preBuild UP-TO-DATE
-> Task :modules:rhino:preReleaseBuild UP-TO-DATE
 > Task :app:preAppReleaseBuild UP-TO-DATE
+> Task :modules:rhino:preReleaseBuild UP-TO-DATE
 > Task :modules:book:preReleaseBuild UP-TO-DATE
 > Task :modules:rhino:mergeReleaseJniLibFolders UP-TO-DATE
 > Task :modules:book:mergeReleaseJniLibFolders UP-TO-DATE
 > Task :app:mergeAppReleaseJniLibFolders UP-TO-DATE
 > Task :modules:rhino:mergeReleaseNativeLibs NO-SOURCE
 > Task :modules:book:mergeReleaseNativeLibs NO-SOURCE
-> Task :modules:rhino:copyReleaseJniLibsProjectOnly UP-TO-DATE
-> Task :modules:book:copyReleaseJniLibsProjectOnly UP-TO-DATE
-> Task :modules:rhino:checkKotlinGradlePluginConfigurationErrors SKIPPED
-> Task :modules:book:checkKotlinGradlePluginConfigurationErrors SKIPPED
-> Task :modules:book:generateReleaseResources UP-TO-DATE
-> Task :modules:rhino:generateReleaseResources UP-TO-DATE
-> Task :modules:rhino:packageReleaseResources UP-TO-DATE
-> Task :modules:book:packageReleaseResources UP-TO-DATE
-> Task :modules:rhino:processReleaseNavigationResources UP-TO-DATE
-> Task :modules:book:processReleaseNavigationResources UP-TO-DATE
 > Task :app:buildKotlinToolingMetadata UP-TO-DATE
-> Task :modules:book:parseReleaseLocalResources UP-TO-DATE
+> Task :modules:rhino:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :modules:rhino:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:book:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :modules:book:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:rhino:generateReleaseResources UP-TO-DATE
+> Task :modules:book:generateReleaseResources UP-TO-DATE
+> Task :modules:rhino:packageReleaseResources UP-TO-DATE
+> Task :modules:rhino:processReleaseNavigationResources UP-TO-DATE
 > Task :modules:rhino:parseReleaseLocalResources UP-TO-DATE
 > Task :modules:rhino:generateReleaseRFile UP-TO-DATE
+> Task :modules:book:packageReleaseResources UP-TO-DATE
+> Task :modules:book:processReleaseNavigationResources UP-TO-DATE
+> Task :modules:book:parseReleaseLocalResources UP-TO-DATE
 > Task :modules:book:generateReleaseRFile UP-TO-DATE
 > Task :modules:book:compileReleaseKotlin NO-SOURCE
 > Task :modules:book:javaPreCompileRelease UP-TO-DATE
@@ -37,18 +36,24 @@ Daemon will be stopped at the end of the build
 > Task :modules:book:bundleLibCompileToJarRelease UP-TO-DATE
 > Task :modules:book:prepareReleaseArtProfile UP-TO-DATE
 > Task :modules:book:bundleLibRuntimeToJarRelease UP-TO-DATE
+> Task :modules:book:processReleaseJavaRes UP-TO-DATE
+> Task :modules:book:generateReleaseAssets UP-TO-DATE
+> Task :modules:book:mergeReleaseAssets UP-TO-DATE
+> Task :modules:book:createFullJarRelease UP-TO-DATE
+> Task :modules:book:extractProguardFiles UP-TO-DATE
+> Task :modules:book:generateReleaseLintModel UP-TO-DATE
+> Task :modules:book:prepareLintJarForPublish UP-TO-DATE
+> Task :modules:book:checkReleaseAarMetadata UP-TO-DATE
+> Task :modules:book:stripReleaseDebugSymbols NO-SOURCE
+> Task :modules:book:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :modules:book:extractDeepLinksForAarRelease UP-TO-DATE
 > Task :modules:rhino:compileReleaseKotlin UP-TO-DATE
 > Task :modules:rhino:javaPreCompileRelease UP-TO-DATE
 > Task :modules:rhino:compileReleaseJavaWithJavac NO-SOURCE
 > Task :modules:rhino:mergeReleaseGeneratedProguardFiles UP-TO-DATE
 > Task :modules:rhino:exportReleaseConsumerProguardFiles UP-TO-DATE
-> Task :modules:book:processReleaseJavaRes UP-TO-DATE
 > Task :modules:rhino:writeReleaseAarMetadata UP-TO-DATE
-> Task :modules:book:generateReleaseAssets UP-TO-DATE
 > Task :modules:rhino:extractDeepLinksRelease UP-TO-DATE
-> Task :modules:book:mergeReleaseAssets UP-TO-DATE
-> Task :modules:book:createFullJarRelease UP-TO-DATE
-> Task :modules:book:extractProguardFiles UP-TO-DATE
 > Task :modules:rhino:processReleaseManifest UP-TO-DATE
 > Task :modules:rhino:bundleLibCompileToJarRelease UP-TO-DATE
 > Task :modules:rhino:prepareReleaseArtProfile UP-TO-DATE
@@ -58,37 +63,43 @@ Daemon will be stopped at the end of the build
 > Task :modules:rhino:mergeReleaseAssets UP-TO-DATE
 > Task :modules:rhino:createFullJarRelease UP-TO-DATE
 > Task :modules:rhino:extractProguardFiles UP-TO-DATE
-> Task :modules:book:generateReleaseLintModel UP-TO-DATE
-> Task :modules:book:prepareLintJarForPublish UP-TO-DATE
-> Task :modules:book:checkReleaseAarMetadata UP-TO-DATE
-> Task :modules:book:stripReleaseDebugSymbols NO-SOURCE
-> Task :modules:book:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
-> Task :modules:book:extractDeepLinksForAarRelease UP-TO-DATE
-> Task :modules:rhino:generateReleaseLintModel UP-TO-DATE
-> Task :modules:rhino:prepareLintJarForPublish UP-TO-DATE
-> Task :modules:rhino:checkReleaseAarMetadata UP-TO-DATE
-> Task :modules:rhino:stripReleaseDebugSymbols NO-SOURCE
-> Task :modules:rhino:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
-> Task :modules:rhino:extractDeepLinksForAarRelease UP-TO-DATE
 > Task :modules:book:extractReleaseAnnotations UP-TO-DATE
 > Task :modules:book:mergeReleaseConsumerProguardFiles UP-TO-DATE
 > Task :modules:book:mergeReleaseJavaResource UP-TO-DATE
 > Task :modules:book:syncReleaseLibJars UP-TO-DATE
 > Task :modules:book:bundleReleaseLocalLintAar UP-TO-DATE
+> Task :modules:book:lintVitalAnalyzeRelease UP-TO-DATE
+> Task :modules:book:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :modules:book:generateReleaseLintVitalModel UP-TO-DATE
+> Task :modules:rhino:generateReleaseLintModel UP-TO-DATE
+> Task :modules:rhino:prepareLintJarForPublish UP-TO-DATE
+> Task :modules:book:bundleReleaseAar UP-TO-DATE
+> Task :modules:book:mapReleaseSourceSetPaths UP-TO-DATE
+> Task :modules:rhino:checkReleaseAarMetadata UP-TO-DATE
+> Task :modules:rhino:stripReleaseDebugSymbols NO-SOURCE
+> Task :modules:rhino:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :modules:rhino:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :modules:book:mergeReleaseResources UP-TO-DATE
+> Task :modules:book:verifyReleaseResources UP-TO-DATE
+> Task :modules:book:assembleRelease UP-TO-DATE
 > Task :modules:rhino:extractReleaseAnnotations UP-TO-DATE
 > Task :modules:rhino:mergeReleaseConsumerProguardFiles UP-TO-DATE
 > Task :modules:rhino:mergeReleaseJavaResource UP-TO-DATE
 > Task :modules:rhino:syncReleaseLibJars UP-TO-DATE
 > Task :modules:rhino:bundleReleaseLocalLintAar UP-TO-DATE
-> Task :modules:book:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :modules:rhino:lintVitalAnalyzeRelease UP-TO-DATE
 > Task :modules:rhino:writeReleaseLintModelMetadata UP-TO-DATE
-> Task :modules:book:generateReleaseLintVitalModel UP-TO-DATE
 > Task :modules:rhino:generateReleaseLintVitalModel UP-TO-DATE
+> Task :modules:rhino:bundleReleaseAar UP-TO-DATE
+> Task :modules:rhino:mapReleaseSourceSetPaths UP-TO-DATE
+> Task :modules:rhino:mergeReleaseResources UP-TO-DATE
+> Task :modules:rhino:verifyReleaseResources UP-TO-DATE
+> Task :modules:rhino:assembleRelease UP-TO-DATE
+> Task :app:checkAppReleaseDuplicateClasses UP-TO-DATE
 > Task :app:mergeAppReleaseNativeLibs UP-TO-DATE
 > Task :app:stripAppReleaseDebugSymbols UP-TO-DATE
 > Task :app:extractAppReleaseNativeSymbolTables UP-TO-DATE
 > Task :app:mergeAppReleaseNativeDebugMetadata NO-SOURCE
-> Task :app:checkAppReleaseDuplicateClasses UP-TO-DATE
 > Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
 > Task :app:dataBindingMergeDependencyArtifactsAppRelease UP-TO-DATE
 > Task :app:generateAppReleaseResources UP-TO-DATE
@@ -98,14 +109,16 @@ Daemon will be stopped at the end of the build
 > Task :app:processAppReleaseNavigationResources UP-TO-DATE
 > Task :app:parseAppReleaseLocalResources UP-TO-DATE
 > Task :app:dataBindingGenBaseClassesAppRelease UP-TO-DATE
-> Task :app:generateAppReleaseBuildConfig
+> Task :app:generateAppReleaseBuildConfig UP-TO-DATE
 > Task :app:checkAppReleaseAarMetadata UP-TO-DATE
 > Task :app:compileAppReleaseNavigationResources UP-TO-DATE
 > Task :app:mapAppReleaseSourceSetPaths UP-TO-DATE
-> Task :app:createAppReleaseCompatibleScreenManifests
+> Task :app:createAppReleaseCompatibleScreenManifests UP-TO-DATE
 > Task :app:extractDeepLinksAppRelease UP-TO-DATE
-> Task :app:processAppReleaseMainManifest
-> Task :app:processAppReleaseManifest
+> Task :app:processAppReleaseMainManifest UP-TO-DATE
+> Task :app:processAppReleaseManifest UP-TO-DATE
+> Task :app:processAppReleaseManifestForPackage UP-TO-DATE
+> Task :app:processAppReleaseResources UP-TO-DATE
 > Task :app:javaPreCompileAppRelease UP-TO-DATE
 > Task :app:mergeAppReleaseArtProfile UP-TO-DATE
 > Task :app:extractProguardFiles UP-TO-DATE
@@ -113,29 +126,118 @@ Daemon will be stopped at the end of the build
 > Task :app:generateAppReleaseAssets UP-TO-DATE
 > Task :app:mergeAppReleaseAssets UP-TO-DATE
 > Task :app:compressAppReleaseAssets UP-TO-DATE
-> Task :app:extractAppReleaseVersionControlInfo
+> Task :app:extractAppReleaseVersionControlInfo UP-TO-DATE
 > Task :app:collectAppReleaseDependencies UP-TO-DATE
 > Task :app:sdkAppReleaseDependencyData UP-TO-DATE
 > Task :app:validateSigningAppRelease UP-TO-DATE
 > Task :app:writeAppReleaseAppMetadata UP-TO-DATE
 > Task :app:writeAppReleaseSigningConfigVersions UP-TO-DATE
-> Task :app:processAppReleaseManifestForPackage
-> Task :modules:book:lintVitalAnalyzeRelease
-> Task :app:processAppReleaseResources
-> Task :modules:rhino:lintVitalAnalyzeRelease
 > Task :app:kspAppReleaseKotlin
-
 > Task :app:compileAppReleaseKotlin
 w: file:///workspace/app/src/main/java/io/legado/app/App.kt:76:25 'static fun setThreadAssertsDisabledForTesting(disabled: Boolean): Unit' is deprecated. Deprecated in Java.
-w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/page/DialogRoleManager.kt:67:62 Java type mismatch: inferred type is 'Nothing?', but 'String' was expected.
+w: file:///workspace/app/src/main/java/io/legado/app/data/AppDatabase.kt:72:10 'fun fallbackToDestructiveMigration(): RoomDatabase.Builder<AppDatabase>' is deprecated. Replace by overloaded version with parameter to indicate if all tables should be dropped or not.
+w: file:///workspace/app/src/main/java/io/legado/app/help/GifImageLoader.kt:6:8 'class Movie : Any' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/help/GifImageLoader.kt:47:25 'class Movie : Any' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/help/GifImageLoader.kt:47:31 'static fun decodeFile(p0: String!): Movie!' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/help/GifImageLoader.kt:85:48 'class Movie : Any' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/help/GifImageLoader.kt:92:25 'fun duration(): Int' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/help/GifImageLoader.kt:95:15 'fun setTime(p0: Int): Boolean' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/help/GifImageLoader.kt:96:15 'fun draw(p0: Canvas!, p1: Float, p2: Float): Unit' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/help/GifImageLoader.kt:99:51 'fun width(): Int' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/help/GifImageLoader.kt:100:52 'fun height(): Int' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/help/GifImageLoader.kt:104:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///workspace/app/src/main/java/io/legado/app/help/GifImageLoader.kt:107:30 'fun duration(): Int' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/help/GifImageLoader.kt:128:25 'fun duration(): Int' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/help/GlideImageGetter.kt:199:46 'val opacity: Int' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/help/JsExtensions.kt:325:41 Unchecked cast of 'Any?' to 'Map<String, Any>'.
+w: file:///workspace/app/src/main/java/io/legado/app/help/JsExtensions.kt:330:29 Unnecessary safe call on a non-null receiver of type 'Any'.
+w: file:///workspace/app/src/main/java/io/legado/app/help/config/ThemeConfig.kt:131:13 'when' is exhaustive so 'else' is redundant here.
+w: file:///workspace/app/src/main/java/io/legado/app/help/gsyVideo/BiliDanmukuParser.kt:236:33 Condition is always 'true'.
+w: file:///workspace/app/src/main/java/io/legado/app/help/tts/JsWebSocketConnection.kt:42:33 The corresponding parameter in the supertype 'WebSocketListener' is named 'webSocket'. This may cause problems when calling this function with named arguments.
+w: file:///workspace/app/src/main/java/io/legado/app/help/tts/JsWebSocketConnection.kt:47:36 The corresponding parameter in the supertype 'WebSocketListener' is named 'webSocket'. This may cause problems when calling this function with named arguments.
+w: file:///workspace/app/src/main/java/io/legado/app/help/tts/JsWebSocketConnection.kt:51:36 The corresponding parameter in the supertype 'WebSocketListener' is named 'webSocket'. This may cause problems when calling this function with named arguments.
+w: file:///workspace/app/src/main/java/io/legado/app/help/tts/JsWebSocketConnection.kt:55:36 The corresponding parameter in the supertype 'WebSocketListener' is named 'webSocket'. This may cause problems when calling this function with named arguments.
+w: file:///workspace/app/src/main/java/io/legado/app/help/tts/JsWebSocketConnection.kt:60:35 The corresponding parameter in the supertype 'WebSocketListener' is named 'webSocket'. This may cause problems when calling this function with named arguments.
+w: file:///workspace/app/src/main/java/io/legado/app/help/tts/JsWebSocketConnection.kt:65:36 The corresponding parameter in the supertype 'WebSocketListener' is named 'webSocket'. This may cause problems when calling this function with named arguments.
+w: file:///workspace/app/src/main/java/io/legado/app/help/tts/TtsWebSocketHelper.kt:223:43 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Throwable'.
+w: file:///workspace/app/src/main/java/io/legado/app/help/update/AppUpdateGitee.kt:40:28 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///workspace/app/src/main/java/io/legado/app/model/AiImageGenerator.kt:916:42 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///workspace/app/src/main/java/io/legado/app/model/AiImageGenerator.kt:921:41 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///workspace/app/src/main/java/io/legado/app/model/AiImageGenerator.kt:999:30 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///workspace/app/src/main/java/io/legado/app/model/AiImageGenerator.kt:1055:44 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///workspace/app/src/main/java/io/legado/app/model/AiImageGenerator.kt:1079:65 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///workspace/app/src/main/java/io/legado/app/model/AiImageGenerator.kt:1215:46 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///workspace/app/src/main/java/io/legado/app/model/AiImageGenerator.kt:1219:45 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///workspace/app/src/main/java/io/legado/app/model/localBook/LocalBook.kt:347:33 Unnecessary safe call on a non-null receiver of type 'String'.
+w: file:///workspace/app/src/main/java/io/legado/app/service/AudioPlayService.kt:535:32 'static field FLAG_HANDLES_MEDIA_BUTTONS: Int' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/service/AudioPlayService.kt:536:40 'static field FLAG_HANDLES_TRANSPORT_CONTROLS: Int' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/service/BaseReadAloudService.kt:200:40 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///workspace/app/src/main/java/io/legado/app/service/BaseReadAloudService.kt:369:45 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///workspace/app/src/main/java/io/legado/app/service/BaseReadAloudService.kt:798:18 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'Pair<File, String>?'.
+w: file:///workspace/app/src/main/java/io/legado/app/service/BaseReadAloudService.kt:798:24 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'Pair<File, String>?'.
+w: file:///workspace/app/src/main/java/io/legado/app/service/BgmAIService.kt:165:41 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///workspace/app/src/main/java/io/legado/app/service/HttpReadAloudService.kt:1550:43 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Throwable'.
+w: file:///workspace/app/src/main/java/io/legado/app/service/HttpReadAloudService.kt:1960:17 Condition is always 'true'.
+w: file:///workspace/app/src/main/java/io/legado/app/service/HttpTtsAudioCache.kt:75:47 Elvis operator (?:) always returns the left operand of non-nullable type 'String'.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:484:21 Condition is always 'true'.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:636:17 Condition is always 'true'.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:960:93 Redundant call of conversion method.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:998:76 Elvis operator (?:) always returns the left operand of non-nullable type 'String'.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:1068:76 Elvis operator (?:) always returns the left operand of non-nullable type 'String'.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:1082:72 Redundant call of conversion method.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:1132:40 'fun toByte(): Byte' is deprecated. Conversion of Char to Number is deprecated. Use Char.code property instead.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:1132:69 'fun toByte(): Byte' is deprecated. Conversion of Char to Number is deprecated. Use Char.code property instead.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:1133:46 'fun toByte(): Byte' is deprecated. Conversion of Char to Number is deprecated. Use Char.code property instead.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:1133:75 'fun toByte(): Byte' is deprecated. Conversion of Char to Number is deprecated. Use Char.code property instead.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:1134:46 'fun toByte(): Byte' is deprecated. Conversion of Char to Number is deprecated. Use Char.code property instead.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:1134:75 'fun toByte(): Byte' is deprecated. Conversion of Char to Number is deprecated. Use Char.code property instead.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:1135:47 'fun toByte(): Byte' is deprecated. Conversion of Char to Number is deprecated. Use Char.code property instead.
+w: file:///workspace/app/src/main/java/io/legado/app/service/TTSReadAloudService.kt:1135:77 'fun toByte(): Byte' is deprecated. Conversion of Char to Number is deprecated. Use Char.code property instead.
+w: file:///workspace/app/src/main/java/io/legado/app/service/VideoPlayService.kt:196:36 'static field FLAG_HANDLES_MEDIA_BUTTONS: Int' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/service/VideoPlayService.kt:197:44 'static field FLAG_HANDLES_TRANSPORT_CONTROLS: Int' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/about/UpdateDialog.kt:62:25 Condition is always 'true'.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/CharacterManagerDialog.kt:10:8 'class PreferenceManager : Any' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/CharacterManagerDialog.kt:289:21 'class PreferenceManager : Any' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/CharacterManagerDialog.kt:289:39 'static fun getDefaultSharedPreferences(p0: Context!): SharedPreferences!' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/CharacterManagerDialog.kt:492:21 'class PreferenceManager : Any' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/CharacterManagerDialog.kt:492:39 'static fun getDefaultSharedPreferences(p0: Context!): SharedPreferences!' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/CharacterManagerDialog.kt:497:21 'class PreferenceManager : Any' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/CharacterManagerDialog.kt:497:39 'static fun getDefaultSharedPreferences(p0: Context!): SharedPreferences!' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/CharacterVoiceHelper.kt:221:40 'class PreferenceManager : Any' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/CharacterVoiceHelper.kt:221:58 'static fun getDefaultSharedPreferences(p0: Context!): SharedPreferences!' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/ConfigListDialog.kt:7:8 'class PreferenceManager : Any' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/ConfigListDialog.kt:1180:52 Unchecked cast of 'SpinnerAdapter!' to 'ArrayAdapter<String>'.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/ConfigListDialog.kt:1198:46 Unchecked cast of 'Any!' to 'List<ConfigListDialog.VoiceInfo>'.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/ConfigListDialog.kt:1223:21 'class PreferenceManager : Any' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/ConfigListDialog.kt:1223:39 'static fun getDefaultSharedPreferences(p0: Context!): SharedPreferences!' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/ConfigListDialog.kt:1379:32 Unchecked cast of 'Any!' to 'List<ConfigListDialog.VoiceInfo>'.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/FullscreenAiImageDialog.kt:109:51 'static field FLAG_TRANSLUCENT_STATUS: Int' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/FullscreenAiImageDialog.kt:109:105 'static field FLAG_TRANSLUCENT_NAVIGATION: Int' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/FullscreenAiImageDialog.kt:111:13 'var statusBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/FullscreenAiImageDialog.kt:112:13 'var navigationBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/SpeakEngineDialog.kt:241:32 This is a delicate API and its use requires care. Make sure you fully read and understand documentation of the declaration that is marked as a delicate API.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/TtsPreviewHelper.kt:309:70 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/config/TtsPreviewHelper.kt:313:34 Unnecessary safe call on a non-null receiver of type 'ResponseBody'.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/page/AudioCacheIndicatorManager.kt:66:47 Elvis operator (?:) always returns the left operand of non-nullable type 'String'.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/page/AudioCacheIndicatorManager.kt:147:47 Elvis operator (?:) always returns the left operand of non-nullable type 'String'.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/book/read/page/DialogRoleManager.kt:83:62 Java type mismatch: inferred type is 'Nothing?', but 'String' was expected.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/replace/ReplaceRuleAdapter.kt:241:58 Condition is always 'false'.
+w: file:///workspace/app/src/main/java/io/legado/app/ui/replace/ReplaceRuleAdapter.kt:299:58 Condition is always 'false'.
+w: file:///workspace/app/src/main/java/io/legado/app/utils/AudioConvertUtil.kt:161:64 Redundant call of conversion method.
+w: file:///workspace/app/src/main/java/io/legado/app/utils/AudioConvertUtil.kt:172:53 Redundant call of conversion method.
+w: file:///workspace/app/src/main/java/io/legado/app/utils/VideoComposeUtil.kt:170:47 Unnecessary non-null assertion (!!) on a non-null receiver of type 'File'.
+w: file:///workspace/app/src/main/java/io/legado/app/utils/VideoComposeUtil.kt:175:47 Unnecessary non-null assertion (!!) on a non-null receiver of type 'File'.
+w: file:///workspace/app/src/main/java/io/legado/app/utils/VideoComposeUtil.kt:185:51 Unnecessary non-null assertion (!!) on a non-null receiver of type 'File'.
+w: file:///workspace/app/src/main/java/io/legado/app/utils/VideoComposeUtil.kt:191:55 Unnecessary non-null assertion (!!) on a non-null receiver of type 'File'.
+w: file:///workspace/app/src/main/java/io/legado/app/utils/VideoComposeUtil.kt:196:47 Unnecessary non-null assertion (!!) on a non-null receiver of type 'File'.
 
 > Task :app:compileAppReleaseJavaWithJavac
-> Task :app:mergeAppReleaseGeneratedProguardFiles UP-TO-DATE
-> Task :app:processAppReleaseJavaRes UP-TO-DATE
-> Task :app:mergeAppReleaseJavaResource UP-TO-DATE
+> Task :app:mergeAppReleaseGeneratedProguardFiles
+> Task :app:processAppReleaseJavaRes
+> Task :app:expandAppReleaseArtProfileWildcards
 > Task :app:copyRoomSchemas NO-SOURCE
 > Task :app:generateAppReleaseLintVitalReportModel
-> Task :app:expandAppReleaseArtProfileWildcards
+> Task :app:mergeAppReleaseJavaResource
 > Task :app:lintVitalAnalyzeAppRelease
 > Task :app:minifyAppReleaseWithR8
 > Task :app:lintVitalReportAppRelease
@@ -156,5 +258,5 @@ You can use '--warning-mode all' to show the individual deprecation warnings and
 
 For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
 
-BUILD SUCCESSFUL in 3m 1s
-121 actionable tasks: 23 executed, 98 up-to-date
+BUILD SUCCESSFUL in 4m 30s
+129 actionable tasks: 17 executed, 112 up-to-date

@@ -418,6 +418,10 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
                     // 1. 左右滑动翻页：左滑下一页，右滑上一页
                     if (abs(dx) > abs(dy) && abs(dx) > touchSlop * 3) {
                         if (dx < 0) ReadBook.moveToNextPage() else ReadBook.moveToPrevPage()
+                        // 朗读运行中则同步到翻到的新页继续朗读
+                        if (BaseReadAloudService.isRun) {
+                            BaseReadAloudService.syncToCurrentPage()
+                        }
                         handled = true
                         return true
                     }

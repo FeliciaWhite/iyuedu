@@ -89,6 +89,20 @@ abstract class BaseReadAloudService : BaseService(),
         var pause = true
             private set
 
+        /** 当前运行中的朗读服务实例，用于从外部（如半屏朗读 Dialog）调用实例方法 */
+        @JvmStatic
+        var instance: BaseReadAloudService? = null
+
+        /**
+         * 朗读运行中，阅读页被手动翻页后调用：将朗读进度对齐到当前阅读页起点并继续朗读，
+         * 不重读已读过的内容，从翻到的新页开始继续播报。
+         */
+        @JvmStatic
+        fun syncToCurrentPage() {
+            if (!isRun) return
+            instance?.newReadAloud(true, ReadBook.durPageIndex, 0)
+        }
+
         @JvmStatic
         var timeMinute: Int = 0
             private set
@@ -856,6 +870,7 @@ abstract class BaseReadAloudService : BaseService(),
     @SuppressLint("WakelockTimeout")
     override fun onCreate() {
         super.onCreate()
+        instance = this
         isRun = true
         pause = false
         observeLiveBus()
@@ -936,6 +951,7 @@ abstract class BaseReadAloudService : BaseService(),
         }
         isRun = false
         pause = true
+        instance = null
         abandonFocus()
         unregisterReceiver(broadcastReceiver)
         postEvent(EventBus.ALOUD_STATE, Status.STOP)

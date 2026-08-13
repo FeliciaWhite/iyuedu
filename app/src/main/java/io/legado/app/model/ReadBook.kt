@@ -621,6 +621,10 @@ object ReadBook : CoroutineScope by MainScope() {
             loadContent(durChapterIndex)
         } else {
             callBack?.upContent()
+            // 同一本书重新打开（upData 路径）且内容已就绪时，不会走 loadContent，
+            // 因此这里主动通知内容加载完成，确保 ReadBookActivity.contentLoadFinish()
+            // 能消费 readAloud 等 extra
+            callBack?.contentLoadFinish()
         }
         if (nextTextChapter == null) {
             loadContent(durChapterIndex + 1)

@@ -323,6 +323,8 @@ class ReadBookActivity : BaseReadBookActivity(),
         super.onPostCreate(savedInstanceState)
         viewModel.initReadBookConfig(intent)
         Looper.myQueue().addIdleHandler {
+            // readAloud extra 由 contentLoadFinish() 统一消费，
+            // 覆盖 resetData 与 upData（同书重开）两条路径
             viewModel.initData(intent)
             false
         }
@@ -331,6 +333,9 @@ class ReadBookActivity : BaseReadBookActivity(),
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
+        // Activity 实例复用时（如停止朗读后再次点击书架耳机按钮），
+        // readAloud extra 只通过 onNewIntent 进入；由 contentLoadFinish() 统一消费
         viewModel.initData(intent)
     }
 

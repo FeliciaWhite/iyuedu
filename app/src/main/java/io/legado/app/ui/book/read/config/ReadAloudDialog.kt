@@ -385,30 +385,30 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
     @SuppressLint("ClickableViewAccessibility")
     private fun initSwipeToDismiss() {
         val touchSlop = ViewConfiguration.get(requireContext()).scaledTouchSlop
-        var accumDy = 0f
+        var startY = 0f
         val gestureDetector = GestureDetector(requireContext(), object : GestureDetector.SimpleOnGestureListener() {
             override fun onDown(e: MotionEvent): Boolean {
-                accumDy = 0f
+                startY = e.y
                 return true
             }
 
-            // 用 onScroll 累积位移判断，不依赖 fling 速度，慢速滑动也能触发
+            // 用 e2.y - startY 的绝对位移判断（不依赖 distanceY 符号，避免方向歧义）：
+            // dy < 0 → 手指上移（从下往上滑）→ 半屏进全屏；
+            // dy > 0 → 手指下移（从上往下滑）→ 退出。
             override fun onScroll(
                 e1: MotionEvent?,
                 e2: MotionEvent,
                 distanceX: Float,
                 distanceY: Float
             ): Boolean {
-                accumDy += -distanceY // 上滑 distanceY<0 → 累加正；下滑 distanceY>0 → 累加负
-                // 半屏模式下，向上滑动达到阈值 → 进入全屏并开始朗读
-                if (!AppConfig.showReadAloudCoverSubtitle && accumDy > touchSlop * 3) {
-                    accumDy = 0f
+                val dy = e2.y - startY
+                // 半屏模式下，从下往上滑动达到阈值 → 进入全屏并开始朗读
+                if (!AppConfig.showReadAloudCoverSubtitle && dy < -touchSlop * 3) {
                     enterFullscreenAndReadAloud()
                     return true
                 }
-                // 任意模式向下滑动达到阈值 → 退出
-                if (accumDy < -touchSlop * 3) {
-                    accumDy = 0f
+                // 任意模式从上往下滑动达到阈值 → 退出
+                if (dy > touchSlop * 3) {
                     dismiss()
                     return true
                 }

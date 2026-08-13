@@ -243,11 +243,12 @@ class ReadView(context: Context, attrs: AttributeSet) :
                         return true
                     }
                     if (bottomSwipeUp) return true
-                    //非滚动翻页模式下，从屏幕上半部分（竖直中线以上）任意位置向下滑动停止朗读
+                    //非滚动翻页模式下，从屏幕上半部分（排除顶部10%，避免与下拉状态栏冲突）任意位置向下滑动停止朗读
                     if (!isScroll
                         && !isTextSelected
                         && !topSwipeDown
                         && !bottomSwipeUp
+                        && startY > height * 0.1f
                         && startY < height * 0.667f
                         && event.y > startY + bottomSwipeSlop
                         && absY >= absX * 0.9f

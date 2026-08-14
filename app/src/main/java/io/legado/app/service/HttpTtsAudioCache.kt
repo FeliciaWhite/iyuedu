@@ -42,8 +42,8 @@ object HttpTtsAudioCache {
         File(appCtx.externalCacheDir, "systemTTS").apply { if (!exists()) mkdirs() }
     }
 
-    private val speechRate: Int by lazy {
-        AppConfig.speechRatePlay + 5
+    private fun speechRate(): Int {
+        return AppConfig.speechRatePlay + 5
     }
 
     /**
@@ -59,7 +59,7 @@ object HttpTtsAudioCache {
         val c = content.trim()
         val indexPart = if (index >= 0) "|$index" else ""
         // 必须与 HttpReadAloudService.getFileNameHelper 保持完全一致
-        return MD5Utils.md5Encode16(t) + "_" + MD5Utils.md5Encode16("$speechRate-$indexPart-|$c")
+        return MD5Utils.md5Encode16(t) + "_" + MD5Utils.md5Encode16("${speechRate()}-$indexPart-|$c")
     }
 
     /**

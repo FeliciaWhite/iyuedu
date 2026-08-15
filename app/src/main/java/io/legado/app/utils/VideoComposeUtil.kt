@@ -16,8 +16,11 @@ import io.legado.app.constant.AppLog
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
-import java.io.ByteArrayOutputStream
+import java.io.BufferedInputStream
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import kotlin.math.abs
 import kotlin.math.min
 
 /**
@@ -55,12 +58,16 @@ object VideoComposeUtil {
     /**
      * 合成幻灯片式视频。
      *
-     * @param audioFiles 按朗读顺序的章节缓存音频（与 segmentTexts 一一对应）
+     * @param audioFiles 按朗读顺序的章节缓存音频（与 segmentTexts 一一对应），
+     *                    用于计算每段时长以对齐字幕/图片分段。
      * @param imageTracks 本章已保存图片轨道（段落区间对应 segment 索引）
      * @param segmentTexts 每段朗读文本，用于烧入字幕
      * @param outputFile 输出 MP4 文件
      * @param frameRate 视频帧率（默认 10fps，画面不变时复用缓存帧）
      * @param burnSubtitle 是否把字幕烧入画面（跟随"合并时保存字幕"开关）
+     * @param mixedAudioFile 可选：已混入音效的整章音频（如带音效合并后的 WAV）。
+     *                       若提供，则作为视频音轨（带音效），但分段时长仍由 [audioFiles]
+     *                       计算以保持字幕/画面的分段对齐；二者时长偏差过大时自动回退用原始音频。
      * @return true 表示成功写出 MP4
      */
     fun composeSlideshowVideo(
@@ -73,7 +80,8 @@ object VideoComposeUtil {
         subtitleFontSizeScale: Float = 1f,
         subtitleVOffset: Float = 0f,
         splitSubtitle: Boolean = false,
-        subtitleMaxChars: Int = 15
+        subtitleMaxChars: Int = 15,
+        mixedAudioFile: File? = null
     ): Boolean {
         if (audioFiles.isEmpty()) {
             AppLog.put("$TAG: 无音频文件，无法合成视频")
@@ -94,56 +102,97 @@ object VideoComposeUtil {
         // 0. 视频尺寸取第一张图片的尺寸（过大时等比缩小，宽高取偶），竖图输出竖版视频
         val (width, height) = resolveVideoSize(imageTracks.first().file)
 
-        // 1. 解码每段音频并统一到第一段格式，拼接为完整 PCM，同时算每段时长
-        val pcms = mutableListOf<AudioConcatUtil.PcmData>()
-        for (f in audioFiles) {
-            val p = AudioConcatUtil.decodeToPcm(f)
-            if (p == null) {
-                AppLog.put("$TAG: 音频解码失败 ${f.name}")
+        // 1. 逐段解码并统一到第一段格式，流式写入临时 PCM 文件，同时算每段时长。
+        //    （避免整章 PCM 全量驻留内存：长章节全部 PCM 可达数百 MB，是合成闪退的主因）
+        val pcmTempFile = File(outputFile.parentFile ?: File("."), ".${outputFile.name}.audio.pcm")
+        val mixedTempFile = File(outputFile.parentFile ?: File("."), ".${outputFile.name}.mixed.pcm")
+        var sampleRate = 0
+        var channels = 0
+        var totalAudioUs = 0L
+        var segDurationsUs: List<Long> = emptyList()
+        try {
+            val first = AudioConcatUtil.decodeToPcm(audioFiles.first())
+            if (first == null) {
+                AppLog.put("$TAG: 音频解码失败 ${audioFiles.first().name}")
                 return false
             }
-            pcms.add(p)
-        }
-        val sampleRate = pcms.first().sampleRate
-        val channels = pcms.first().channels
-        val resampled = pcms.map { AudioConcatUtil.resamplePcm(it, sampleRate, channels) }
-        val bytesPerFrame = channels * 2
+            sampleRate = first.sampleRate
+            channels = first.channels
+            val bytesPerFrame = channels * 2
+            val durations = mutableListOf<Long>()
+            var totalFrames = 0L
+            outputFile.parentFile?.mkdirs()
+            FileOutputStream(pcmTempFile).use { fos ->
+                audioFiles.forEachIndexed { i, f ->
+                    // 第一段已解码；其余逐段解码，写完文件即可被 GC 回收，内存峰值只保留一段
+                    val p = if (i == 0) first else AudioConcatUtil.decodeToPcm(f)
+                    if (p == null) {
+                        AppLog.put("$TAG: 音频解码失败 ${f.name}")
+                        return false
+                    }
+                    val res = AudioConcatUtil.resamplePcm(p, sampleRate, channels)
+                    val frames = res.bytes.size / bytesPerFrame
+                    durations.add(if (sampleRate > 0) frames * 1_000_000L / sampleRate else 0L)
+                    totalFrames += frames
+                    fos.write(res.bytes)
+                }
+            }
+            segDurationsUs = durations
+            totalAudioUs = if (sampleRate > 0) totalFrames * 1_000_000L / sampleRate else 0L
 
-        val segDurationsUs = resampled.map { seg ->
-            val frameCount = seg.bytes.size / bytesPerFrame
-            if (sampleRate > 0) frameCount * 1_000_000L / sampleRate else 0L
-        }
+            // 2. 确定实际使用的音轨 PCM 文件：
+            //    - 提供了 mixedAudioFile 且解码成功、时长与原始分段拼接接近（偏差<=5%）时，
+            //      用带音效的混音文件作为音轨（音效为叠加，不改变总时长，分段对齐仍成立）；
+            //    - 否则回退用原始分段拼接的 PCM 文件，保证不崩、不错位。
+            var chosenPcmFile = pcmTempFile
+            if (mixedAudioFile != null && mixedAudioFile.exists() && mixedAudioFile.length() > 0) {
+                val mixed = AudioConcatUtil.decodeToPcm(mixedAudioFile)
+                if (mixed != null) {
+                    val mixedResampled = AudioConcatUtil.resamplePcm(mixed, sampleRate, channels)
+                    val mixedUs = if (sampleRate > 0)
+                        (mixedResampled.bytes.size / bytesPerFrame) * 1_000_000L / sampleRate else 0L
+                    val diff = if (totalAudioUs > 0)
+                        abs(mixedUs - totalAudioUs).toFloat() / totalAudioUs else 1f
+                    if (mixedResampled.bytes.isNotEmpty() && diff <= 0.05f) {
+                        AppLog.put("$TAG: 使用混音音频作为视频音轨(带音效), 时长=${mixedUs}us")
+                        FileOutputStream(mixedTempFile).use { it.write(mixedResampled.bytes) }
+                        chosenPcmFile = mixedTempFile
+                    } else {
+                        AppLog.put("$TAG: 混音音频时长与分段不一致(${mixedUs}us vs ${totalAudioUs}us)，回退原始音频")
+                    }
+                } else {
+                    AppLog.put("$TAG: 混音音频解码失败，回退原始音频")
+                }
+            }
 
-        val pcmOut = java.io.ByteArrayOutputStream()
-        resampled.forEach { pcmOut.write(it.bytes) }
-        val pcmBytes = pcmOut.toByteArray()
-        if (pcmBytes.isEmpty()) {
-            AppLog.put("$TAG: 拼接后 PCM 为空")
-            return false
-        }
-        val totalAudioUs = (pcmBytes.size / bytesPerFrame) * 1_000_000L / sampleRate
+            // 3. 构建每段的画面帧（图片 + 字幕 + 时间）
+            val frames = buildFrames(
+                imageTracks, segmentTexts, segDurationsUs, totalAudioUs,
+                burnSubtitle, splitSubtitle, subtitleMaxChars
+            )
+            if (frames.isEmpty()) {
+                AppLog.put("$TAG: 未生成任何画面帧")
+                return false
+            }
 
-        // 2. 构建每段的画面帧（图片 + 字幕 + 时间）
-        val frames = buildFrames(imageTracks, segmentTexts, segDurationsUs, totalAudioUs, burnSubtitle, splitSubtitle, subtitleMaxChars)
-        if (frames.isEmpty()) {
-            AppLog.put("$TAG: 未生成任何画面帧")
-            return false
+            // 4. 编码并 mux（音频从临时 PCM 文件流式读取，不驻留内存）
+            return encodeMp4(
+                outputFile = outputFile,
+                frames = frames,
+                pcmFile = chosenPcmFile,
+                sampleRate = sampleRate,
+                channels = channels,
+                width = width,
+                height = height,
+                frameRate = frameRate,
+                totalAudioUs = totalAudioUs,
+                subtitleFontSizeScale = subtitleFontSizeScale,
+                subtitleVOffset = subtitleVOffset
+            )
+        } finally {
+            pcmTempFile.delete()
+            mixedTempFile.delete()
         }
-
-        // 3. 编码并 mux
-        return encodeMp4(
-            outputFile = outputFile,
-            frames = frames,
-            pcmBytes = pcmBytes,
-            sampleRate = sampleRate,
-            channels = channels,
-            width = width,
-            height = height,
-            frameRate = frameRate,
-            totalAudioUs = totalAudioUs,
-            subtitleFontSizeScale = subtitleFontSizeScale,
-            subtitleVOffset = subtitleVOffset
-        )
     }
 
     /**
@@ -249,7 +298,7 @@ object VideoComposeUtil {
     private fun encodeMp4(
         outputFile: File,
         frames: List<FrameItem>,
-        pcmBytes: ByteArray,
+        pcmFile: File,
         sampleRate: Int,
         channels: Int,
         width: Int,
@@ -302,12 +351,20 @@ object VideoComposeUtil {
         var segCursor = 0
         var lastRenderedSeg = -1
 
-        var pcmOffset = 0
         var frameIdx = 0
         var videoQueuedEos = false
         var audioQueuedEos = false
         var videoDone = false
         var audioDone = false
+
+        // 音频 PCM 从文件流式读取（不再全量驻留内存），内存只保留一个缓冲块；
+        // 渲染位图/像素数组复用，避免每段画面重复分配 16MB 级大对象
+        var renderBmp: Bitmap? = null
+        var renderPixels: IntArray? = null
+        var pcmIn: BufferedInputStream? = null
+        val pcmReadBuf = ByteArray(64 * 1024)
+        var pcmFrames = 0L
+        var audioEof = false
 
         fun maybeStartMuxer() {
             if (!muxerStarted && videoTrackIdx >= 0 && audioTrackIdx >= 0) {
@@ -317,6 +374,10 @@ object VideoComposeUtil {
         }
 
         try {
+            renderBmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            renderPixels = IntArray(width * height)
+            pcmIn = BufferedInputStream(FileInputStream(pcmFile), 256 * 1024)
+
             while (!(videoDone && audioDone)) {
                 // ---- 喂视频帧（固定 10fps 间隔，画面段不变时复用缓存 yuv）----
                 if (!videoQueuedEos && frameIdx < totalVideoFrames) {
@@ -333,7 +394,11 @@ object VideoComposeUtil {
                             val need = yuv.size
                             if (buf.remaining() >= need) {
                                 if (segCursor != lastRenderedSeg) {
-                                    renderFrameToNv12(frames[segCursor], width, height, yuv, subtitleFontSizeScale, subtitleVOffset)
+                                    renderFrameToNv12(
+                                        frames[segCursor], width, height, yuv,
+                                        renderBmp!!, renderPixels!!,
+                                        subtitleFontSizeScale, subtitleVOffset
+                                    )
                                     lastRenderedSeg = segCursor
                                 }
                                 buf.put(yuv, 0, need)
@@ -354,24 +419,32 @@ object VideoComposeUtil {
                     }
                 }
 
-                // ---- 喂音频 PCM ----
+                // ---- 喂音频 PCM（从文件流式读取，每次尽量填满输入缓冲）----
                 if (!audioQueuedEos) {
                     val inIdx = aEnc.dequeueInputBuffer(timeoutUs)
                     if (inIdx >= 0) {
                         val buf = aEnc.getInputBuffer(inIdx)
                         if (buf != null) {
                             buf.clear()
-                            val remaining = pcmBytes.size - pcmOffset
-                            if (remaining > 0) {
-                                val toCopy = minOf(buf.remaining(), remaining)
-                                buf.put(pcmBytes, pcmOffset, toCopy)
-                                val ptsUs = (pcmOffset / bytesPerFrame) * 1_000_000L / sampleRate
-                                aEnc.queueInputBuffer(inIdx, 0, toCopy, ptsUs, 0)
-                                pcmOffset += toCopy
+                            val cap = buf.remaining()
+                            var filled = 0
+                            while (filled < cap && !audioEof) {
+                                val n = pcmIn!!.read(pcmReadBuf, 0, minOf(pcmReadBuf.size, cap - filled))
+                                if (n < 0) {
+                                    audioEof = true
+                                    break
+                                }
+                                buf.put(pcmReadBuf, 0, n)
+                                filled += n
+                            }
+                            if (filled > 0) {
+                                val ptsUs = pcmFrames * 1_000_000L / sampleRate
+                                aEnc.queueInputBuffer(inIdx, 0, filled, ptsUs, 0)
+                                pcmFrames += filled / bytesPerFrame
                             } else {
                                 aEnc.queueInputBuffer(
                                     inIdx, 0, 0,
-                                    (pcmBytes.size / bytesPerFrame) * 1_000_000L / sampleRate,
+                                    pcmFrames * 1_000_000L / sampleRate,
                                     MediaCodec.BUFFER_FLAG_END_OF_STREAM
                                 )
                                 audioQueuedEos = true
@@ -379,7 +452,7 @@ object VideoComposeUtil {
                         } else {
                             aEnc.queueInputBuffer(
                                 inIdx, 0, 0,
-                                (pcmBytes.size / bytesPerFrame) * 1_000_000L / sampleRate,
+                                pcmFrames * 1_000_000L / sampleRate,
                                 MediaCodec.BUFFER_FLAG_END_OF_STREAM
                             )
                             audioQueuedEos = true
@@ -439,6 +512,8 @@ object VideoComposeUtil {
             AppLog.put("$TAG: 编码异常 ${e.localizedMessage}", e)
             return false
         } finally {
+            try { pcmIn?.close() } catch (_: Exception) {}
+            try { renderBmp?.recycle() } catch (_: Exception) {}
             try { vEnc.stop(); vEnc.release() } catch (_: Exception) {}
             try { aEnc.stop(); aEnc.release() } catch (_: Exception) {}
             try {
@@ -452,18 +527,20 @@ object VideoComposeUtil {
         return ok
     }
 
-    /** 把一帧画面（图片 + 字幕）渲染为 NV12(YUV420) 写入 out */
+    /** 把一帧画面（图片 + 字幕）渲染为 NV12(YUV420) 写入 out。
+     *  bmp/pixels 由调用方复用（画面尺寸固定），避免每段画面重复分配 16MB 级大对象 */
     private fun renderFrameToNv12(
         frame: FrameItem,
         w: Int,
         h: Int,
         out: ByteArray,
+        bmp: Bitmap,
+        pixels: IntArray,
         fontSizeScale: Float,
         vOffset: Float
     ) {
         // BitmapFactory 按文件内容(魔数)嗅探格式，与后缀无关；这里强制 ARGB_8888，
         // 让带广色域/ICC 配置的图片在绘制到 sRGB 画布时正确转换为 sRGB，避免播放时偏色。
-        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
         canvas.drawColor(Color.BLACK)
 
@@ -483,8 +560,7 @@ object VideoComposeUtil {
             drawSubtitle(canvas, frame.subtitle, w, h, fontSizeScale, vOffset)
         }
 
-        argbToNv12(bmp, out)
-        bmp.recycle()
+        argbToNv12(bmp, out, pixels)
     }
 
     /** 画面底部绘制居中字幕：黑色文字 + 白色描边（自动换行，无底栏） */
@@ -562,11 +638,10 @@ object VideoComposeUtil {
         return lines
     }
 
-    /** ARGB8888 -> NV12(YUV420 半平面) */
-    private fun argbToNv12(bmp: Bitmap, out: ByteArray) {
+    /** ARGB8888 -> NV12(YUV420 半平面)；pixels 为调用方复用的像素缓冲 */
+    private fun argbToNv12(bmp: Bitmap, out: ByteArray, pixels: IntArray) {
         val w = bmp.width
         val h = bmp.height
-        val pixels = IntArray(w * h)
         bmp.getPixels(pixels, 0, w, 0, 0, w, h)
         var yIdx = 0
         var uvIdx = w * h

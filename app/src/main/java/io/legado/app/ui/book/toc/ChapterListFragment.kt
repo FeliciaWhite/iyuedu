@@ -368,6 +368,8 @@ class ChapterListFragment : VMBaseFragment<TocViewModel>(R.layout.fragment_chapt
 
                 var finalOutputFile: File? = null
                 var success = false
+                // 记录带音效的混音输出文件（WAV 或 M4A），供后续视频合成作为音轨
+                var mixedAudioForVideo: File? = null
 
                 // 混音分支：开启「合并时混音效」开关且音效模式非关闭时，尝试带音效合并
                 // （与自动合并一致，重叠音效按播放队列行为顺序延后，输出 WAV）
@@ -392,13 +394,16 @@ class ChapterListFragment : VMBaseFragment<TocViewModel>(R.layout.fragment_chapt
                                 if (converted && m4aFile.exists() && m4aFile.length() > 0) {
                                     wavFile.delete()
                                     finalOutputFile = m4aFile
+                                    mixedAudioForVideo = m4aFile
                                     AudioLogCollector.log("带音效合并(M4A)完成: ${m4aFile.absolutePath}")
                                 } else {
                                     AudioLogCollector.log("转换为 M4A 失败，保留 WAV")
                                     finalOutputFile = wavFile
+                                    mixedAudioForVideo = wavFile
                                 }
                             } else {
                                 finalOutputFile = wavFile
+                                mixedAudioForVideo = wavFile
                                 AudioLogCollector.log("带音效合并完成: ${wavFile.absolutePath}")
                             }
                         } else {
@@ -490,7 +495,8 @@ class ChapterListFragment : VMBaseFragment<TocViewModel>(R.layout.fragment_chapt
                         chapterIndex = bookChapter.index,
                         audioFiles = audioFiles,
                         outputFolder = downloadFolder,
-                        filePrefix = filePrefix
+                        filePrefix = filePrefix,
+                        mixedAudioFile = mixedAudioForVideo
                     )
                     if (videoOk) {
                         AudioLogCollector.log("视频生成完成")

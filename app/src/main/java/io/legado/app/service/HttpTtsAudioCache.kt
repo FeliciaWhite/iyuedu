@@ -387,7 +387,11 @@ object HttpTtsAudioCache {
                         }
                     }
                     if (AppConfig.saveVideoWithMerge) {
-                        mergeChapterVideo(book, chapter, chapterIndex, audioFiles, outputFolder, filePrefix)
+                        // 把带音效的混音 WAV 作为视频音轨传入，确保视频音频包含音效
+                        mergeChapterVideo(
+                            book, chapter, chapterIndex, audioFiles, outputFolder,
+                            filePrefix, mixedAudioFile = wavFile
+                        )
                     } else if (AppConfig.saveTextWithMerge) {
                         saveChapterSrtAuto(book, chapter, outputFolder, filePrefix)
                     }
@@ -551,7 +555,8 @@ object HttpTtsAudioCache {
         chapterIndex: Int,
         audioFiles: List<File>,
         outputFolder: File,
-        filePrefix: String
+        filePrefix: String,
+        mixedAudioFile: File? = null
     ): Boolean {
         return withContext(Dispatchers.IO) {
             try {
@@ -577,6 +582,7 @@ object HttpTtsAudioCache {
                     },
                     segmentTexts = alignedSegmentTexts,
                     outputFile = mp4File,
+                    mixedAudioFile = mixedAudioFile,
                     frameRate = 10,
                     burnSubtitle = AppConfig.saveVideoWithMerge,
                     subtitleFontSizeScale = AppConfig.videoSubtitleFontSizeScale,

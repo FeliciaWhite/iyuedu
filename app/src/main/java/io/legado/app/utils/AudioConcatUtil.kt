@@ -10,6 +10,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -578,26 +579,38 @@ object AudioConcatUtil {
     }
 
     /**
-     * 将音效 PCM 叠加到 base PCM 的指定帧偏移处（加法 + 限幅）。
+     * 将音效 PCM 叠加到已落盘 WAV 正文的指定帧偏移处（加法 + 限幅）。
+     * 只读取/写回受音效影响的局部区域（音效通常只有几秒，几百 KB 级），
+     * 避免把整章 PCM 全量加载进内存，长章节（上万字）混音不会 OOM。
+     * @param raf 已打开"rw"模式的 WAV 文件，正文从偏移 44 字节开始
+     * @param baseFrames 正文总帧数
      */
     private fun mixInto(
-        base: ByteArray,
+        raf: RandomAccessFile,
+        baseFrames: Int,
         baseChannels: Int,
         effect: ByteArray,
         effectChannels: Int,
         offsetFrames: Int,
         volume: Float
     ) {
-        val baseBuf = ByteBuffer.wrap(base).order(ByteOrder.LITTLE_ENDIAN)
-        val effBuf = ByteBuffer.wrap(effect).order(ByteOrder.LITTLE_ENDIAN)
-        val baseFrames = base.size / (baseChannels * 2)
         val effFrames = effect.size / (effectChannels * 2)
         val startFrame = offsetFrames.coerceAtLeast(0)
         val count = if (effFrames < baseFrames - startFrame) effFrames else baseFrames - startFrame
+        if (count <= 0) return
+        val frameBytes = baseChannels * 2
+        val regionLen = count.toLong() * frameBytes
+        if (regionLen > Int.MAX_VALUE) return
+        val baseOffset = 44L + startFrame.toLong() * frameBytes
+        raf.seek(baseOffset)
+        val region = ByteArray(regionLen.toInt())
+        raf.readFully(region)
+        val baseBuf = ByteBuffer.wrap(region).order(ByteOrder.LITTLE_ENDIAN)
+        val effBuf = ByteBuffer.wrap(effect).order(ByteOrder.LITTLE_ENDIAN)
         for (f in 0 until count) {
             for (c in 0 until baseChannels) {
                 val effC = if (c < effectChannels) c else effectChannels - 1
-                val bIdx = (startFrame + f) * baseChannels + c
+                val bIdx = f * baseChannels + c
                 val eIdx = f * effectChannels + effC
                 val bv = baseBuf.getShort(bIdx * 2).toInt()
                 val ev = (effBuf.getShort(eIdx * 2).toInt() * volume).toInt()
@@ -605,6 +618,8 @@ object AudioConcatUtil {
                 baseBuf.putShort(bIdx * 2, mixed.toShort())
             }
         }
+        raf.seek(baseOffset)
+        raf.write(region)
     }
 
     /**
@@ -662,52 +677,91 @@ object AudioConcatUtil {
         effectFileProvider: (String) -> File?
     ): Boolean {
         if (audioFiles.isEmpty()) return false
-        // 1. 解码每段并统一到基准格式（以第一段为准）
-        val pcms = mutableListOf<PcmData>()
-        for (f in audioFiles) {
-            val pcm = decodeToPcm(f) ?: return false
-            pcms.add(pcm)
-        }
-        if (pcms.isEmpty()) return false
-        val baseRate = pcms.first().sampleRate
-        val baseChannels = pcms.first().channels
-        val resampled = pcms.map { resamplePcm(it, baseRate, baseChannels) }
-        // 2. 拼接成完整 PCM，并记录每段帧起点
-        val baseOut = ByteArrayOutputStream()
-        val segmentStartFrame = IntArray(resampled.size)
-        var curFrame = 0
-        resampled.forEachIndexed { i, pcm ->
-            segmentStartFrame[i] = curFrame
-            baseOut.write(pcm.bytes)
-            curFrame += pcm.bytes.size / (baseChannels * 2)
-        }
-        val baseArray = baseOut.toByteArray()
-        // 3. 计算每个音效的绝对帧偏移并混音
-        // 顺序叠加：若本音效与上一个已放置的音效在时间上重叠，则延后到上一个播放完毕之后，
-        // 与播放流程「队列顺序播放」行为保持一致，避免重叠时两个音效同时出声。
-        var lastEffectEndFrame = 0
-        segments.forEachIndexed { i, seg ->
-            if (i >= resampled.size) return@forEachIndexed
-            val segFrameCount = resampled[i].bytes.size / (baseChannels * 2)
-            seg.effects.forEach { eff ->
-                val innerRatio = if (seg.textLength > 0)
-                    eff.charOffsetInSegment.toFloat() / seg.textLength else 0f
-                val innerFrame = (innerRatio * segFrameCount).toInt()
-                var absFrame = segmentStartFrame[i] + innerFrame
-                val effFile = effectFileProvider(eff.fileName) ?: return@forEach
-                val effPcm = decodeToPcm(effFile) ?: return@forEach
-                val effResampled = resamplePcm(effPcm, baseRate, baseChannels)
-                val effFrames = effResampled.bytes.size / (baseChannels * 2)
-                // 与上一个音效重叠则延后到其结束之后
-                if (absFrame < lastEffectEndFrame) {
-                    absFrame = lastEffectEndFrame
+        return try {
+            outputFile.parentFile?.mkdirs()
+            RandomAccessFile(outputFile, "rw").use { raf ->
+                // 1. 先占位 44 字节 WAV 头，正文从偏移 44 开始流式写入，
+                //    解码一段写一段，避免整章 PCM 全量驻留内存（长章节不再 OOM）
+                raf.setLength(0)
+                raf.write(ByteArray(44))
+                val first = decodeToPcm(audioFiles.first())
+                    ?: throw IllegalStateException("音频解码失败 ${audioFiles.first().name}")
+                val baseRate = first.sampleRate
+                val baseChannels = first.channels
+                val segmentStartFrame = IntArray(audioFiles.size)
+                val segmentFrameCount = IntArray(audioFiles.size)
+                var curFrame = 0
+                audioFiles.forEachIndexed { i, f ->
+                    val pcm = if (i == 0) first else
+                        decodeToPcm(f) ?: throw IllegalStateException("音频解码失败 ${f.name}")
+                    val res = resamplePcm(pcm, baseRate, baseChannels)
+                    segmentStartFrame[i] = curFrame
+                    val frames = res.bytes.size / (baseChannels * 2)
+                    segmentFrameCount[i] = frames
+                    curFrame += frames
+                    raf.write(res.bytes)
                 }
-                mixInto(baseArray, baseChannels, effResampled.bytes, baseChannels, absFrame, volume)
-                val endFrame = absFrame + effFrames
-                if (endFrame > lastEffectEndFrame) lastEffectEndFrame = endFrame
+                val baseFrames = curFrame
+                // 2. 计算每个音效的绝对帧偏移并混音（只读写音效影响的局部区域）
+                // 顺序叠加：若本音效与上一个已放置的音效在时间上重叠，则延后到上一个播放完毕之后，
+                // 与播放流程「队列顺序播放」行为保持一致，避免重叠时两个音效同时出声。
+                var lastEffectEndFrame = 0
+                segments.forEachIndexed { i, seg ->
+                    if (i >= audioFiles.size) return@forEachIndexed
+                    val segFrameCount = segmentFrameCount[i]
+                    seg.effects.forEach { eff ->
+                        val innerRatio = if (seg.textLength > 0)
+                            eff.charOffsetInSegment.toFloat() / seg.textLength else 0f
+                        val innerFrame = (innerRatio * segFrameCount).toInt()
+                        var absFrame = segmentStartFrame[i] + innerFrame
+                        val effFile = effectFileProvider(eff.fileName) ?: return@forEach
+                        val effPcm = decodeToPcm(effFile) ?: return@forEach
+                        val effResampled = resamplePcm(effPcm, baseRate, baseChannels)
+                        val effFrames = effResampled.bytes.size / (baseChannels * 2)
+                        // 与上一个音效重叠则延后到其结束之后
+                        if (absFrame < lastEffectEndFrame) {
+                            absFrame = lastEffectEndFrame
+                        }
+                        mixInto(raf, baseFrames, baseChannels, effResampled.bytes, baseChannels, absFrame, volume)
+                        val endFrame = absFrame + effFrames
+                        if (endFrame > lastEffectEndFrame) lastEffectEndFrame = endFrame
+                    }
+                }
+                // 3. 回填 WAV 头
+                val totalAudioLength = baseFrames.toLong() * baseChannels * 2
+                raf.seek(0)
+                writeWavHeaderTo(raf, baseRate, baseChannels, totalAudioLength)
             }
+            true
+        } catch (e: Exception) {
+            AppLog.put("$TAG 混音失败: ${e.localizedMessage}")
+            try { outputFile.delete() } catch (_: Exception) {}
+            false
         }
-        // 4. 写 WAV
-        return writePcmToWav(PcmData(baseRate, baseChannels, baseArray), outputFile)
+    }
+
+    /**
+     * 向已打开的 WAV 文件（RandomAccessFile）写入 44 字节标准头。
+     */
+    private fun writeWavHeaderTo(raf: RandomAccessFile, sampleRate: Int, channels: Int, totalAudioLength: Long) {
+        val bitsPerSample = 16
+        val byteRate = sampleRate * channels * bitsPerSample / 8
+        val blockAlign = channels * bitsPerSample / 8
+        val buffer = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)
+        buffer.put("RIFF".toByteArray())
+        buffer.putInt((36 + totalAudioLength).toInt())
+        buffer.put("WAVE".toByteArray())
+        buffer.put("fmt ".toByteArray())
+        buffer.putInt(16)
+        buffer.putShort(1) // PCM
+        buffer.putShort(channels.toShort())
+        buffer.putInt(sampleRate)
+        buffer.putInt(byteRate)
+        buffer.putShort(blockAlign.toShort())
+        buffer.putShort(bitsPerSample.toShort())
+        buffer.put("data".toByteArray())
+        buffer.putInt(totalAudioLength.toInt())
+        raf.seek(0)
+        raf.write(buffer.array())
     }
 }

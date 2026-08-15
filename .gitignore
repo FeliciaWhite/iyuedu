@@ -11,7 +11,7 @@ local.properties
 /角色管理修改文件/
 temp-xf50-clone/
 temp-xf35-source/
-build-release.log
+build-release*.log
 app/schemas/
 
 # Gradle 依赖缓存目录（含大量二进制缓存，不入库）
@@ -20,4 +20,4 @@ app/schemas/
 !/依赖/sdk-packages/
 !/依赖/sdk-packages/**
 !/依赖/打包文档.md
-build_release.log
+build_release*.log

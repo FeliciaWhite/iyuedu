@@ -22,7 +22,7 @@ object DatabaseMigrations {
             migration_39_40, migration_40_41,             migration_41_42,             migration_42_43,
             migration_89_90,
             migration_90_91, migration_91_92, migration_92_93, migration_93_94,
-            migration_94_95, migration_95_96, migration_96_97,
+            migration_94_95, migration_95_96, migration_96_97, migration_97_98,
         )
     }
 
@@ -493,6 +493,21 @@ object DatabaseMigrations {
         override fun migrate(db: SupportSQLiteDatabase) {
             // AI 生图模板新增「角色标注」开关字段，兼容旧版数据库
             db.execSQL("ALTER TABLE `aiImageTemplate` ADD `annotateRoles` INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
+    private val migration_97_98 = object : Migration(97, 98) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // AI 生图模板新增「排序序号」字段：默认模板固定最前，其余按 sortOrder 升序排列
+            db.execSQL("ALTER TABLE `aiImageTemplate` ADD `sortOrder` INTEGER NOT NULL DEFAULT 0")
+            // 给已有数据赋初值：默认模板置为极小值保证最前，其余按 id 顺序递增加值
+            db.execSQL("""
+                UPDATE `aiImageTemplate`
+                SET `sortOrder` = CASE
+                    WHEN `isDefault` = 1 THEN -1000000
+                    ELSE (SELECT COALESCE(MAX(t2.sortOrder), 0) FROM `aiImageTemplate` t2 WHERE t2.isDefault = 1) + `id`
+                END
+            """)
         }
     }
 

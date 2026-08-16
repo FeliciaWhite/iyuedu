@@ -135,6 +135,9 @@ class AiImageTemplateListDialog : BaseDialogFragment(R.layout.dialog_ai_image_te
                         negativePrompt = AiImageGenerator.DEFAULT_NEGATIVE_PROMPT,
                         isDefault = false
                     )
+                    // 新建模板固定在默认模板之后的第 2 位
+                    val minSort = appDb.aiImageTemplateDao.getMinSortOrderOfNonDefault() ?: 0
+                    template.sortOrder = minSort - 1
                     appDb.aiImageTemplateDao.insert(template)
                     template
                 }.onSuccess(Dispatchers.Main) { newTemplate ->

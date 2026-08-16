@@ -670,10 +670,45 @@ class CharacterManagerDialog : DialogFragment() {
     // 保存密钥到 keys.json，并同时保存纯密钥内容到 miyue.txt
     private fun saveKeyToJson(name: String, key: String) {
         val keyMap = getKeyMap()
-        keyMap.put(name, key)
+        putKeyToFront(keyMap, name, key)
         saveKeyMap(keyMap)
         // 同时更新 miyue.txt（保存纯密钥内容）
         writeTxtFile("miyue.txt", key)
+    }
+
+    /**
+     * 将指定密钥移到列表最前面（顶部）。
+     * 重建 keyMap，使 name 位于首部，并同步维护 keys 数组的顺序，
+     * 确保「新建 / 修改」的密钥始终出现在恢复密钥列表最上方。
+     */
+    private fun putKeyToFront(keyMap: JSONObject, name: String, value: String) {
+        // 1. 取出原始 keys 数组顺序（作为权威顺序）
+        val orderedNames = if (keyMap.has("keys")) {
+            val arr = keyMap.optJSONArray("keys")
+            (0 until (arr?.length() ?: 0)).mapNotNull { arr?.optString(it) }.toMutableList()
+        } else {
+            keyMap.keys().asSequence().filter { it != "keys" && it != name }.toMutableList()
+        }
+
+        // 2. 收集除 name 外其余密钥的当前值
+        val valueMap = mutableMapOf<String, String>()
+        keyMap.keys().forEach { k ->
+            if (k != "keys" && k != name) {
+                valueMap[k] = keyMap.optString(k, "")
+            }
+        }
+        valueMap[name] = value
+
+        // 3. 调整顺序：name 置顶，其余按原顺序（排除 name）
+        orderedNames.remove(name)
+        orderedNames.add(0, name)
+
+        // 4. 重建 keyMap：先写 keys 数组，再按 orderedNames 顺序写值（保证 keys() 遍历顺序）
+        keyMap.remove(name)
+        keyMap.put("keys", JSONArray(orderedNames))
+        orderedNames.forEach { n ->
+            if (valueMap.containsKey(n)) keyMap.put(n, valueMap[n] ?: "")
+        }
     }
 
     private fun restoreKey() {
@@ -862,9 +897,18 @@ class CharacterManagerDialog : DialogFragment() {
 
     private fun getKeyNames(keyMap: JSONObject): MutableList<String> {
         val names = mutableListOf<String>()
-        val keysIterator = keyMap.keys()
-        while (keysIterator.hasNext()) {
-            names.add(keysIterator.next())
+        if (keyMap.has("keys")) {
+            val arr = keyMap.optJSONArray("keys")
+            for (i in 0 until (arr?.length() ?: 0)) {
+                val n = arr?.optString(i) ?: continue
+                if (n != "keys") names.add(n)
+            }
+        } else {
+            val keysIterator = keyMap.keys()
+            while (keysIterator.hasNext()) {
+                val key = keysIterator.next()
+                if (key != "keys") names.add(key)
+            }
         }
         return names
     }
@@ -956,7 +1000,8 @@ class CharacterManagerDialog : DialogFragment() {
             if (oldName != newName) {
                 keyMap.remove(oldName)
             }
-            keyMap.put(newName, newKey)
+            // 修改后将该密钥置顶到恢复列表最上方
+            putKeyToFront(keyMap, newName, newKey)
             saveKeyMap(keyMap)
             if (use) {
                 writeTxtFile("miyue.txt", newKey)

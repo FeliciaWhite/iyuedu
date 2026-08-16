@@ -757,6 +757,11 @@ sk-aaa@@sk-bbb@@sk-ccc
         )
 
         lifecycleScope.launch(Dispatchers.IO) {
+            // 非默认模板保存后固定在默认模板之后的第 2 位；默认模板保持最前不变
+            if (!updated.isDefault) {
+                val minSort = appDb.aiImageTemplateDao.getMinSortOrderOfNonDefault() ?: 0
+                updated.sortOrder = minSort - 1
+            }
             appDb.aiImageTemplateDao.insert(updated)
             withContext(Dispatchers.Main) {
                 currentTemplate = updated

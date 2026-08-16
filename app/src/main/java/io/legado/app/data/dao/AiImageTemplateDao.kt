@@ -12,10 +12,10 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface AiImageTemplateDao {
 
-    @Query("SELECT * FROM aiImageTemplate ORDER BY isDefault DESC, lastUpdateTime ASC")
+    @Query("SELECT * FROM aiImageTemplate ORDER BY isDefault DESC, sortOrder ASC, lastUpdateTime ASC")
     fun getAll(): Flow<List<AiImageTemplate>>
 
-    @Query("SELECT * FROM aiImageTemplate ORDER BY isDefault DESC, lastUpdateTime ASC")
+    @Query("SELECT * FROM aiImageTemplate ORDER BY isDefault DESC, sortOrder ASC, lastUpdateTime ASC")
     fun getAllList(): List<AiImageTemplate>
 
     @Query("SELECT * FROM aiImageTemplate WHERE id = :id")
@@ -23,6 +23,9 @@ interface AiImageTemplateDao {
 
     @Query("SELECT * FROM aiImageTemplate WHERE isDefault = 1 LIMIT 1")
     fun getDefault(): AiImageTemplate?
+
+    @Query("SELECT MIN(sortOrder) FROM aiImageTemplate WHERE isDefault = 0")
+    fun getMinSortOrderOfNonDefault(): Int?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insert(vararg template: AiImageTemplate)

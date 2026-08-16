@@ -46,5 +46,11 @@ data class AiImageTemplate(
     @ColumnInfo(defaultValue = "0")
     var annotateRoles: Boolean = false,
     @ColumnInfo(defaultValue = "0")
-    var lastUpdateTime: Long = System.currentTimeMillis()
+    var lastUpdateTime: Long = System.currentTimeMillis(),
+    /**
+     * 排序序号。默认模板（isDefault=true）永远排最前，其余模板按此值升序排列。
+     * 新建或修改模板时会被设为「最小的非默认 sortOrder - 1」，使其固定在默认模板之后的第 2 位。
+     */
+    @ColumnInfo(defaultValue = "0")
+    var sortOrder: Int = 0
 )

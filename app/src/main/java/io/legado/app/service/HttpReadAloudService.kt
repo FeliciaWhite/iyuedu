@@ -212,6 +212,9 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
     private val downloadTaskActiveLock = Mutex()
     private var silentPlayCheckJob: Job? = null
     private var lastActivateTime: Long = 0L
+    // 标记当前是否因主动控制（切段/调速/重播等）而打断播放器，
+    // 用于区分「被打断」与「音频真损坏」，避免误删缓存与误跳段
+    private var interruptedByControl = false
 
     private var subtitleSyncJob: Job? = null
     private var currentSubtitles: List<String> = emptyList()
@@ -407,6 +410,8 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
     override fun play(affectBgm: Boolean) {
         pageChanged = false
         // play 操作在 UI 线程触发，直接 stop 即可，无需协程包裹
+        // 标记为「主动控制打断」，避免 stop 触发的播放错误误删缓存/误跳段
+        interruptedByControl = true
         exoPlayer.stop()
         exoPlayer.clearMediaItems()
         
@@ -518,6 +523,8 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
         pageIndex = tc.getPageIndexByCharIndex(readAloudNumber)
 
         // 立即停止当前音频并重新从目标段落整段播放
+        // 标记为「主动控制打断」，避免 stop 触发的播放错误误删缓存/误跳段
+        interruptedByControl = true
         exoPlayer.stop()
         play()
     }
@@ -1760,6 +1767,8 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
 
     override fun upSpeechRate(reset: Boolean) {
         downloadTask?.cancel()
+        // 标记为「主动控制打断」，避免 stop 触发的播放错误误删缓存/误跳段
+        interruptedByControl = true
         exoPlayer.stop()
         speechRate = AppConfig.speechRatePlay + 5
         if (AppConfig.streamReadAloudAudio) {
@@ -1966,6 +1975,13 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
 
     override fun onPlayerError(error: PlaybackException) {
         super.onPlayerError(error)
+        // 主动控制（切段/调速/重播等）打断播放器时，stop/clear 可能触发播放错误。
+        // 这种情况并非音频损坏，不跳段、不删缓存、不计入错误计数，等当前段正常播完即可。
+        if (interruptedByControl) {
+            interruptedByControl = false
+            AppLog.putDebug("朗读播放被主动控制中断（非音频损坏），忽略错误继续: ${contentList.getOrNull(nowSpeak)}")
+            return
+        }
         AppLog.put("朗读错误\n${contentList[nowSpeak]}", error)
         deleteCurrentSpeakFile()
         playErrorNo++
@@ -1986,8 +2002,17 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
         if (AppConfig.streamReadAloudAudio) return
         val mediaItem = exoPlayer.currentMediaItem ?: return
         val filePath = mediaItem.localConfiguration?.uri?.path ?: return
-        File(filePath).delete()
-        File("$filePath.seginfo").delete()
+        // 守卫：仅当该文件确实对应当前朗读段落（nowSpeak）时才删除，
+        // 避免切换/打断窗口中误删其它尚未播放完的合法缓存音频
+        val mediaIndex = mediaItem.mediaId.toIntOrNull() ?: return
+        if (mediaIndex != nowSpeak) return
+        val file = File(filePath)
+        if (!file.exists()) return
+        // 仅在文件明显异常（空文件）时才判定为损坏；正常长度的缓存保留不删
+        if (file.length() <= 0) {
+            file.delete()
+            File("$filePath.seginfo").delete()
+        }
     }
 
     override fun aloudServicePendingIntent(actionStr: String): PendingIntent? {

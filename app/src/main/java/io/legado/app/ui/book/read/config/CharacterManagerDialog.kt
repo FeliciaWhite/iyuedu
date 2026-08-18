@@ -677,38 +677,23 @@ class CharacterManagerDialog : DialogFragment() {
     }
 
     /**
-     * 将指定密钥移到列表最前面（顶部）。
-     * 重建 keyMap，使 name 位于首部，并同步维护 keys 数组的顺序，
-     * 确保「新建 / 修改」的密钥始终出现在恢复密钥列表最上方。
+     * 将指定密钥移到列表最前面（顶部），保持旧格式 {name:key, ...} 不变。
+     * 通过重建 keyMap 的插入顺序实现置顶：先放入 name，再按原有顺序放入其余密钥。
+     * 不引入任何额外字段（如 keys 数组），确保与旧版本（降级）完全兼容。
      */
     private fun putKeyToFront(keyMap: JSONObject, name: String, value: String) {
-        // 1. 取出原始 keys 数组顺序（作为权威顺序）
-        val orderedNames = if (keyMap.has("keys")) {
-            val arr = keyMap.optJSONArray("keys")
-            (0 until (arr?.length() ?: 0)).mapNotNull { arr?.optString(it) }.toMutableList()
-        } else {
-            keyMap.keys().asSequence().filter { it != "keys" && it != name }.toMutableList()
-        }
-
-        // 2. 收集除 name 外其余密钥的当前值
+        // 收集当前所有密钥名称与值（排除将要置顶的 name）
+        val orderedNames = keyMap.keys().asSequence()
+            .filter { it != name }
+            .toMutableList()
         val valueMap = mutableMapOf<String, String>()
-        keyMap.keys().forEach { k ->
-            if (k != "keys" && k != name) {
-                valueMap[k] = keyMap.optString(k, "")
-            }
-        }
-        valueMap[name] = value
+        orderedNames.forEach { n -> valueMap[n] = keyMap.optString(n, "") }
 
-        // 3. 调整顺序：name 置顶，其余按原顺序（排除 name）
-        orderedNames.remove(name)
-        orderedNames.add(0, name)
-
-        // 4. 重建 keyMap：先写 keys 数组，再按 orderedNames 顺序写值（保证 keys() 遍历顺序）
+        // 重建 keyMap：name 置顶，其余按原顺序跟随
         keyMap.remove(name)
-        keyMap.put("keys", JSONArray(orderedNames))
-        orderedNames.forEach { n ->
-            if (valueMap.containsKey(n)) keyMap.put(n, valueMap[n] ?: "")
-        }
+        orderedNames.forEach { keyMap.remove(it) }
+        keyMap.put(name, value)
+        orderedNames.forEach { n -> keyMap.put(n, valueMap[n] ?: "") }
     }
 
     private fun restoreKey() {
@@ -896,19 +881,11 @@ class CharacterManagerDialog : DialogFragment() {
     }
 
     private fun getKeyNames(keyMap: JSONObject): MutableList<String> {
+        // 旧格式兼容：直接遍历 keys.json 内的所有字段（均为密钥名）
         val names = mutableListOf<String>()
-        if (keyMap.has("keys")) {
-            val arr = keyMap.optJSONArray("keys")
-            for (i in 0 until (arr?.length() ?: 0)) {
-                val n = arr?.optString(i) ?: continue
-                if (n != "keys") names.add(n)
-            }
-        } else {
-            val keysIterator = keyMap.keys()
-            while (keysIterator.hasNext()) {
-                val key = keysIterator.next()
-                if (key != "keys") names.add(key)
-            }
+        val keysIterator = keyMap.keys()
+        while (keysIterator.hasNext()) {
+            names.add(keysIterator.next())
         }
         return names
     }
@@ -1016,20 +993,8 @@ class CharacterManagerDialog : DialogFragment() {
     }
 
     private fun saveKeyMap(keyMap: JSONObject) {
-        // 只保存到 keys.json，不再写入 miyue.txt
-        val keysArray = JSONArray()
-        val keysIterator = keyMap.keys()
-        while (keysIterator.hasNext()) {
-            keysArray.put(keysIterator.next())
-        }
-        val result = JSONObject()
-        result.put("keys", keysArray)
-        val keysIterator2 = keyMap.keys()
-        while (keysIterator2.hasNext()) {
-            val keyName = keysIterator2.next()
-            result.put(keyName, keyMap.getString(keyName))
-        }
-        writeTxtFile("keys.json", result.toString())
+        // 只保存到 keys.json，保持旧格式 {name:key, ...} 不变（不写入额外字段）
+        writeTxtFile("keys.json", keyMap.toString())
     }
 
     private fun getKeyMap(): JSONObject {

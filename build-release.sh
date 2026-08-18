@@ -178,6 +178,14 @@ setup_env() {
   export ANDROID_HOME="$sdk"
   export ANDROID_SDK_ROOT="$sdk"
   export PATH="$sdk/platform-tools:$sdk/cmdline-tools/latest/bin:$PATH"
+
+  # 复用项目约定的 Gradle 依赖缓存（/workspace/依赖），避免重新下载全部 Maven 依赖
+  export GRADLE_USER_HOME="${GRADLE_USER_HOME:-/workspace/依赖}"
+  ok "GRADLE_USER_HOME=$GRADLE_USER_HOME"
+
+  # 生成 local.properties 指向 SDK，确保 gradle 能找到 android sdk
+  echo "sdk.dir=$sdk" > "$PROJECT_DIR/local.properties"
+  ok "写入 local.properties (sdk.dir=$sdk)"
 }
 
 # ---------- 2. 打包 ----------

@@ -146,6 +146,14 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
         }
     }
 
+    /** 直接加载已配置好 placeholder/error 的 RequestBuilder（用于书籍封面） */
+    private fun loadIntoBoth(builder: com.bumptech.glide.RequestBuilder<android.graphics.drawable.Drawable>) {
+        builder.into(binding.ivBookCover)
+        binding.ivFullscreenBg.let { bg ->
+            Glide.with(bg).load(builder).into(bg)
+        }
+    }
+
     /**
      * 从图片文件解码并按目标宽高比从中间裁剪。
      * - 读取图片实际尺寸，计算 inSampleSize 降采样防止 OOM
@@ -574,7 +582,7 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
             // 启动定时器轮换图片
             startImageTimer(ivBookCover)
         } else {
-            // 没有本地图片，显示书籍封面
+            // 没有本地图片，显示书籍封面（使用带占位/错误图的加载链路，避免白屏）
             loadIntoBoth(BookCover.load(requireContext(), book.getDisplayCover()))
             stopImageTimer()
         }

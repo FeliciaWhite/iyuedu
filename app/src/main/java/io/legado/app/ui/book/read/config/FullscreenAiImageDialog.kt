@@ -200,8 +200,10 @@ class FullscreenAiImageDialog : BaseDialogFragment(R.layout.dialog_fullscreen_im
                 loadImage(binding.ivFullscreenImage, localImageFiles[0])
                 startLocalImageTimer()
             } else {
+                // 没有本地图片，显示书籍封面（关闭生图后扫描不到图片时回退，避免白屏）
                 localImageFiles = emptyList()
                 localImageIndex = 0
+                showBookCover()
             }
         }
     }

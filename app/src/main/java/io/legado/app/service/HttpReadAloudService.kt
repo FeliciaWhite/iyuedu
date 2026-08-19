@@ -212,9 +212,6 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
     private val downloadTaskActiveLock = Mutex()
     private var silentPlayCheckJob: Job? = null
     private var lastActivateTime: Long = 0L
-    // 标记当前是否因主动控制（切段/调速/重播等）而打断播放器，
-    // 用于区分「被打断」与「音频真损坏」，避免误删缓存与误跳段
-    private var interruptedByControl = false
 
     private var subtitleSyncJob: Job? = null
     private var currentSubtitles: List<String> = emptyList()
@@ -357,6 +354,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                 MediaItem.Builder()
                     .setMediaId("$index")
                     .setUri(Uri.fromFile(file))
+                    .setMimeType(mimeTypeForFile(file))
                     .build()
             )
         segInfo.forEach { (offset, length) ->
@@ -410,8 +408,6 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
     override fun play(affectBgm: Boolean) {
         pageChanged = false
         // play 操作在 UI 线程触发，直接 stop 即可，无需协程包裹
-        // 标记为「主动控制打断」，避免 stop 触发的播放错误误删缓存/误跳段
-        interruptedByControl = true
         exoPlayer.stop()
         exoPlayer.clearMediaItems()
         
@@ -523,8 +519,6 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
         pageIndex = tc.getPageIndexByCharIndex(readAloudNumber)
 
         // 立即停止当前音频并重新从目标段落整段播放
-        // 标记为「主动控制打断」，避免 stop 触发的播放错误误删缓存/误跳段
-        interruptedByControl = true
         exoPlayer.stop()
         play()
     }
@@ -581,6 +575,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                             val mediaItem = MediaItem.Builder()
                                 .setMediaId("$index")
                                 .setUri(Uri.fromFile(file))
+                                .setMimeType(mimeTypeForFile(file))
                                 .build()
                             launch(Dispatchers.Main) {
                                 exoPlayer.addMediaItem(mediaItem)
@@ -607,6 +602,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                             val mediaItem = MediaItem.Builder()
                                 .setMediaId("$index")
                                 .setUri(Uri.fromFile(file))
+                                .setMimeType(mimeTypeForFile(file))
                                 .build()
                             launch(Dispatchers.Main) {
                                 exoPlayer.addMediaItem(mediaItem)
@@ -671,6 +667,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                             val mediaItem = MediaItem.Builder()
                                 .setMediaId("$index")
                                 .setUri(Uri.fromFile(file))
+                                .setMimeType(mimeTypeForFile(file))
                                 .build()
                             launch(Dispatchers.Main) {
                                 exoPlayer.addMediaItem(mediaItem)
@@ -684,6 +681,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                             val mediaItem = MediaItem.Builder()
                                 .setMediaId("$index")
                                 .setUri(Uri.fromFile(file))
+                                .setMimeType(mimeTypeForFile(file))
                                 .build()
                             launch(Dispatchers.Main) {
                                 exoPlayer.addMediaItem(mediaItem)
@@ -844,6 +842,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                             val mediaItem = MediaItem.Builder()
                                 .setMediaId("$index")
                                 .setUri(Uri.fromFile(file))
+                                .setMimeType(mimeTypeForFile(file))
                                 .build()
                             launch(Dispatchers.Main) {
                                 exoPlayer.addMediaItem(mediaItem)
@@ -1640,6 +1639,27 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
         file.writeBytes(BaseReadAloudService.generateSilentWavBytes(50))
     }
 
+    /**
+     * 根据文件真实字节头判定音频 MIME。
+     * 转发器合成的音频其实是 WAV（RIFF/WAVE），但为统一把后缀写成了 .mp3。
+     * ExoPlayer 默认按 .mp3 扩展名解析，会把 WAV 的 PCM 数据误当成 mp3 帧，
+     * 在队列（多段衔接）模式下偶发提前 STATE_ENDED（表现为「读一半就停」）。
+     * 这里按文件头强制指定 audio/wav，让 ExoPlayer 正确解析到真实 EOF。
+     * 返回 null 表示不指定，交由 ExoPlayer 自行探测。
+     */
+    private fun mimeTypeForFile(file: File): String? {
+        runCatching {
+            val header = ByteArray(12)
+            file.inputStream().use { it.read(header) }
+            if (header[0] == 'R'.code.toByte() && header[1] == 'I'.code.toByte() &&
+                header[2] == 'F'.code.toByte() && header[3] == 'F'.code.toByte() &&
+                header[8] == 'W'.code.toByte() && header[9] == 'A'.code.toByte() &&
+                header[10] == 'V'.code.toByte() && header[11] == 'E'.code.toByte()
+            ) return "audio/wav"
+        }
+        return null
+    }
+
     private fun hasSpeakFile(name: String): Boolean {
         return File("${ttsFolderPath}$name.mp3").exists()
     }
@@ -1767,8 +1787,6 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
 
     override fun upSpeechRate(reset: Boolean) {
         downloadTask?.cancel()
-        // 标记为「主动控制打断」，避免 stop 触发的播放错误误删缓存/误跳段
-        interruptedByControl = true
         exoPlayer.stop()
         speechRate = AppConfig.speechRatePlay + 5
         if (AppConfig.streamReadAloudAudio) {
@@ -1975,26 +1993,16 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
 
     override fun onPlayerError(error: PlaybackException) {
         super.onPlayerError(error)
-        // 主动控制（切段/调速/重播等）打断播放器时，stop/clear 可能触发播放错误。
-        // 这种情况并非音频损坏，不跳段、不删缓存、不计入错误计数，等当前段正常播完即可。
-        if (interruptedByControl) {
-            interruptedByControl = false
-            AppLog.putDebug("朗读播放被主动控制中断（非音频损坏），忽略错误继续: ${contentList.getOrNull(nowSpeak)}")
-            return
-        }
-        AppLog.put("朗读错误\n${contentList[nowSpeak]}", error)
-        deleteCurrentSpeakFile()
+        // 本地缓存音频（wav 伪装 mp3）在队列中偶发被 ExoPlayer 误报异常，
+        // 但文件本身是完好的（MIME 已按文件头设为 audio/wav，可正常播到 EOF）。
+        // 这里不再把偶发异常当作「音频损坏」：不删除缓存、不跳段、不停止，
+        // 让当前段自然播完，由 STATE_ENDED 正常推进到下一段，避免误删/误跳段。
+        // 仅累计错误次数，连续多次真报错才静默重置服务（应对真正的损坏文件）。
+        AppLog.putDebug("朗读播放偶发异常（忽略，继续播放）: ${contentList.getOrNull(nowSpeak)} | ${error.localizedMessage}")
         playErrorNo++
         if (playErrorNo >= 5) {
             AppLog.put("朗读连续5次错误，静默重置错误计数器(${error.localizedMessage})", error)
             restartTtsService()
-        }
-        if (exoPlayer.hasNextMediaItem()) {
-            exoPlayer.seekToNextMediaItem()
-            exoPlayer.prepare()
-        } else {
-            exoPlayer.clearMediaItems()
-            updateNextPos()
         }
     }
 
@@ -2002,17 +2010,8 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
         if (AppConfig.streamReadAloudAudio) return
         val mediaItem = exoPlayer.currentMediaItem ?: return
         val filePath = mediaItem.localConfiguration?.uri?.path ?: return
-        // 守卫：仅当该文件确实对应当前朗读段落（nowSpeak）时才删除，
-        // 避免切换/打断窗口中误删其它尚未播放完的合法缓存音频
-        val mediaIndex = mediaItem.mediaId.toIntOrNull() ?: return
-        if (mediaIndex != nowSpeak) return
-        val file = File(filePath)
-        if (!file.exists()) return
-        // 仅在文件明显异常（空文件）时才判定为损坏；正常长度的缓存保留不删
-        if (file.length() <= 0) {
-            file.delete()
-            File("$filePath.seginfo").delete()
-        }
+        File(filePath).delete()
+        File("$filePath.seginfo").delete()
     }
 
     override fun aloudServicePendingIntent(actionStr: String): PendingIntent? {

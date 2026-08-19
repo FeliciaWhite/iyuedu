@@ -31,6 +31,9 @@ import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.extractor.ExtractorsFactory
+import androidx.media3.extractor.wav.WavExtractor
 import com.script.ScriptException
 import io.legado.app.R
 import io.legado.app.constant.AppLog
@@ -208,6 +211,8 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
     private var downloadTask: Coroutine<*>? = null
     private var playIndexJob: Job? = null
     private var playErrorNo = 0
+    // 当前段出错是否已重试过，保证同一段只重试一次，避免死循环
+    private var itemRetryPending = false
     private var downloadErrorNo: Int = 0
     private val downloadTaskActiveLock = Mutex()
     private var silentPlayCheckJob: Job? = null
@@ -363,7 +368,14 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                 .setMediaId(file.name)
                 .build()
             builder.add(
-                ProgressiveMediaSource.Factory(factory).createMediaSource(mediaItem),
+                ProgressiveMediaSource.Factory(
+                    factory,
+                    if (isWavFile(mediaItem.localConfiguration?.uri?.path)) {
+                        ExtractorsFactory { arrayOf(WavExtractor()) }
+                    } else {
+                        androidx.media3.extractor.DefaultExtractorsFactory()
+                    }
+                ).createMediaSource(mediaItem),
                 3000
             )
         }
@@ -530,6 +542,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
         AppLog.put("请求音频连续失败，静默重置错误计数器，不中断朗读")
         downloadErrorNo = 0
         playErrorNo = 0
+        itemRetryPending = false
         // 连续失败兜底：重新激活转发器 TTS 引擎，避免引擎被系统回收后一直失败
         activateHttpTtsEngine(force = true)
     }
@@ -576,7 +589,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                                 .setUri(Uri.fromFile(file))
                                 .build()
                             launch(Dispatchers.Main) {
-                                exoPlayer.addMediaItem(mediaItem)
+                                exoPlayer.addMediaSource(createLocalMediaSource(mediaItem))
                             }
                         }
                         return@forEachIndexed
@@ -602,7 +615,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                                 .setUri(Uri.fromFile(file))
                                 .build()
                             launch(Dispatchers.Main) {
-                                exoPlayer.addMediaItem(mediaItem)
+                                exoPlayer.addMediaSource(createLocalMediaSource(mediaItem))
                             }
                         }
                     } else {
@@ -622,7 +635,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                                                     .setUri(Uri.fromFile(file))
                                                     .build()
                                                 launch(Dispatchers.Main) {
-                                                    exoPlayer.addMediaItem(mediaItem)
+                                                    exoPlayer.addMediaSource(createLocalMediaSource(mediaItem))
                                                 }
                                             }
                                         } else {
@@ -653,7 +666,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                                             .setUri(Uri.fromFile(file))
                                             .build()
                                         launch(Dispatchers.Main) {
-                                            exoPlayer.addMediaItem(mediaItem)
+                                            exoPlayer.addMediaSource(createLocalMediaSource(mediaItem))
                                         }
                                     }
                                 }
@@ -666,7 +679,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                                 .setUri(Uri.fromFile(file))
                                 .build()
                             launch(Dispatchers.Main) {
-                                exoPlayer.addMediaItem(mediaItem)
+                                exoPlayer.addMediaSource(createLocalMediaSource(mediaItem))
                             }
                         }
                                 }
@@ -679,7 +692,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                                 .setUri(Uri.fromFile(file))
                                 .build()
                             launch(Dispatchers.Main) {
-                                exoPlayer.addMediaItem(mediaItem)
+                                exoPlayer.addMediaSource(createLocalMediaSource(mediaItem))
                             }
                         }
                                 }
@@ -697,7 +710,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                                                 .setUri(Uri.fromFile(file))
                                                 .build()
                                             launch(Dispatchers.Main) {
-                                                exoPlayer.addMediaItem(mediaItem)
+                                                exoPlayer.addMediaSource(createLocalMediaSource(mediaItem))
                                             }
                                         }
                                     } else {
@@ -839,7 +852,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                                 .setUri(Uri.fromFile(file))
                                 .build()
                             launch(Dispatchers.Main) {
-                                exoPlayer.addMediaItem(mediaItem)
+                                exoPlayer.addMediaSource(createLocalMediaSource(mediaItem))
                             }
                         }
                     } else {
@@ -857,7 +870,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                                                     .setUri(Uri.fromFile(file))
                                                     .build()
                                                 launch(Dispatchers.Main) {
-                                                    exoPlayer.addMediaItem(mediaItem)
+                                                    exoPlayer.addMediaSource(createLocalMediaSource(mediaItem))
                                                 }
                                             }
                                         } else {
@@ -895,7 +908,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                                             .setUri(Uri.fromFile(file))
                                             .build()
                                         launch(Dispatchers.Main) {
-                                            exoPlayer.addMediaItem(mediaItem)
+                                            exoPlayer.addMediaSource(createLocalMediaSource(mediaItem))
                                         }
                                     }
                                 }
@@ -913,7 +926,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                                                 .setUri(Uri.fromFile(file))
                                                 .build()
                                             launch(Dispatchers.Main) {
-                                                exoPlayer.addMediaItem(mediaItem)
+                                                exoPlayer.addMediaSource(createLocalMediaSource(mediaItem))
                                             }
                                         }
                                     } else {
@@ -1058,6 +1071,40 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
         val request = DownloadRequest.Builder(fileName, uri).build()
         return DefaultDownloaderFactory(factory, okHttpClient.dispatcher.executorService)
             .createDownloader(request)
+    }
+
+    /**
+     * 探测本地文件头部是否为 WAV（RIFF/WAVE）。
+     * 缓存文件扩展名统一为 .mp3，但内容可能是 WAV，需按真实头部识别。
+     */
+    private fun isWavFile(path: String?): Boolean {
+        if (path.isNullOrEmpty()) return false
+        return try {
+            val header = ByteArray(12)
+            val read = java.io.File(path).inputStream().use { it.read(header, 0, 12) }
+            read >= 12 &&
+                    String(header.copyOfRange(0, 4)) == "RIFF" &&
+                    String(header.copyOfRange(8, 12)) == "WAVE"
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * 用本地文件构建 MediaSource：按文件真实头部选择解码器，而非依赖扩展名。
+     * - WAV 内容（即使扩展名为 .mp3）强制使用 WavExtractor。
+     * - 其余走 ExoPlayer 默认探测，按内容识别真实格式。
+     */
+    private fun createLocalMediaSource(mediaItem: MediaItem): MediaSource {
+        val dataSourceFactory = DefaultDataSource.Factory(this)
+        val extractorsFactory = if (isWavFile(mediaItem.localConfiguration?.uri?.path)) {
+            ExtractorsFactory { arrayOf(WavExtractor()) }
+        } else {
+            androidx.media3.extractor.DefaultExtractorsFactory()
+        }
+        return ProgressiveMediaSource.Factory(dataSourceFactory, extractorsFactory)
+            .setLoadErrorHandlingPolicy(loadErrorHandlingPolicy)
+            .createMediaSource(mediaItem)
     }
 
     private fun createMediaSource(factory: DataSource.Factory, fileName: String): MediaSource {
@@ -1936,6 +1983,8 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
         if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) return
         if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
             playErrorNo = 0
+            // 正常切到下一段，重置当前段重试标志，允许下一段各自重试一次
+            itemRetryPending = false
         }
         if (mediaItem != null) {
             val mediaIndex = mediaItem.mediaId.toIntOrNull() ?: -1
@@ -1972,6 +2021,21 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
             AppLog.put("朗读连续5次错误，静默重置错误计数器(${error.localizedMessage})", error)
             restartTtsService()
         }
+        // 同一段出错只重试一次：重建当前段 MediaSource（干净解码器实例），从出错位置续播
+        val currentItem = exoPlayer.currentMediaItem
+        if (!itemRetryPending && currentItem != null) {
+            val errorPosition = exoPlayer.currentPosition
+            val index = exoPlayer.currentMediaItemIndex
+            AppLog.putDebug("朗读出错，从出错位置(${errorPosition}ms)重试当前段")
+            val freshSource = createLocalMediaSource(currentItem)
+            exoPlayer.removeMediaItem(index)
+            exoPlayer.addMediaSource(index, freshSource)
+            exoPlayer.seekTo(index, errorPosition)
+            exoPlayer.play()
+            itemRetryPending = true
+            return
+        }
+        // 已重试过或无可重试项，跳到下一段
         if (exoPlayer.hasNextMediaItem()) {
             exoPlayer.seekToNextMediaItem()
             exoPlayer.prepare()

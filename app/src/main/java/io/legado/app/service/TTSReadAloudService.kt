@@ -101,6 +101,7 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener,
     }
     private var playIndexJob: Job? = null
     private var playErrorNo = 0
+    private var itemRetryPending = false
 
     // ====== 缓存目录 ======
     private val ttsFolderPath: String by lazy {
@@ -436,6 +437,7 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener,
         // 新章节合成时检查缓存命中则直接复用。
         preloadJob?.cancel()
         playErrorNo = 0
+        itemRetryPending = false
 
         val chapterTitle = textChapter?.title ?: textChapter?.chapter?.title ?: ""
         val endIndex = if (singleParagraphMode) (nowSpeak + 1).coerceAtMost(contentList.size) else contentList.size
@@ -613,6 +615,7 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener,
         if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) return
         if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
             playErrorNo = 0
+            itemRetryPending = false
         }
         if (mediaItem != null) {
             val mediaIndex = mediaItem.mediaId.toIntOrNull() ?: -1
@@ -646,6 +649,19 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener,
         playIndexJob?.cancel()
         silentPlayCheckJob?.cancel()
         playErrorNo++
+        // 同一段出错只重建重试一次：从实际报错位置重建当前项并续播，不丢内容
+        val currentItem = exoPlayer.currentMediaItem
+        if (playErrorNo < 5 && !itemRetryPending && currentItem != null) {
+            val errorPosition = exoPlayer.currentPosition
+            val index = exoPlayer.currentMediaItemIndex
+            AppLog.putDebug("TTS朗读出错，从实际报错位置(${errorPosition}ms)重建续播当前段")
+            exoPlayer.removeMediaItem(index)
+            exoPlayer.addMediaItem(index, currentItem)
+            exoPlayer.seekTo(index, errorPosition)
+            exoPlayer.play()
+            itemRetryPending = true
+            return
+        }
         if (playErrorNo >= 5) {
             pauseReadAloud()
         } else {

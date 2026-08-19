@@ -2021,12 +2021,13 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
             AppLog.put("朗读连续5次错误，静默重置错误计数器(${error.localizedMessage})", error)
             restartTtsService()
         }
-        // 同一段出错只重试一次：重建当前段 MediaSource（干净解码器实例），从出错位置续播
+        // 同一段出错只重试一次：重建当前段 MediaSource（新解码器实例）并从实际报错位置续播
+        // 注意：渲染层致命错误后解码器已失效，必须提供新的 MediaSource 才能继续，否则 play() 会卡死
         val currentItem = exoPlayer.currentMediaItem
         if (!itemRetryPending && currentItem != null) {
             val errorPosition = exoPlayer.currentPosition
             val index = exoPlayer.currentMediaItemIndex
-            AppLog.putDebug("朗读出错，从出错位置(${errorPosition}ms)重试当前段")
+            AppLog.putDebug("朗读出错，从实际报错位置(${errorPosition}ms)重建续播当前段")
             val freshSource = createLocalMediaSource(currentItem)
             exoPlayer.removeMediaItem(index)
             exoPlayer.addMediaSource(index, freshSource)

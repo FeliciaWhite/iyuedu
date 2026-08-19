@@ -1967,7 +1967,6 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
     override fun onPlayerError(error: PlaybackException) {
         super.onPlayerError(error)
         AppLog.put("朗读错误\n${contentList[nowSpeak]}", error)
-        deleteCurrentSpeakFile()
         playErrorNo++
         if (playErrorNo >= 5) {
             AppLog.put("朗读连续5次错误，静默重置错误计数器(${error.localizedMessage})", error)

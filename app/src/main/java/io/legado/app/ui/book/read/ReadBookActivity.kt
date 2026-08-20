@@ -1489,7 +1489,7 @@ class ReadBookActivity : BaseReadBookActivity(),
                 1f
             )
         }
-        val genderOptions = listOf("男", "女", "特殊", "")
+        val genderOptions = listOf("男", "女", "特殊", "旁白", "系统", "")
         val spGender = Spinner(context).apply {
             adapter = ArrayAdapter(
                 context,

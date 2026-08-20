@@ -12,9 +12,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.database.StandaloneDatabaseProvider
-import androidx.media3.datasource.BaseDataSource
 import androidx.media3.datasource.DataSource
-import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.cache.CacheDataSink
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
@@ -25,7 +23,6 @@ import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.offline.DefaultDownloaderFactory
 import androidx.media3.exoplayer.offline.DownloadRequest
 import androidx.media3.exoplayer.offline.Downloader
-import androidx.media3.exoplayer.source.ConcatenatingMediaSource2
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
@@ -97,7 +94,6 @@ import splitties.init.appCtx
 import android.media.MediaMetadataRetriever
 import java.io.File
 import java.io.InputStream
-import java.io.RandomAccessFile
 import kotlin.coroutines.coroutineContext
 
 /**
@@ -238,20 +234,22 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
     // ========== 分段音频信息文件 (.seginfo) ==========
 
     /**
-     * 回退：按原始方式保存 MultiSegment（直接拼接 + 生成 seginfo）
+     * 回退：按原始方式保存 MultiSegment（拼接为一个完整文件，整文件播放）
+     * 不再写 .seginfo 分段信息：其记录的是网络分片边界而非真实音频段边界，
+     * 按其切段播放会在分片边界处解析失败报错
      */
     private suspend fun fallbackSaveMultiSegment(fileName: String, speakResult: TtsSpeakResult.MultiSegment, index: Int) {
         val out = java.io.ByteArrayOutputStream()
         speakResult.segments.forEach { out.write(it) }
         createSpeakFile(fileName, ByteArrayInputStream(out.toByteArray()))
-        val ranges = speakResult.ranges.map { it.first.toLong() to it.second.toLong() }
-        writeSegInfo(fileName, ranges)
         val file = getSpeakFileAsMd5(fileName)
-        val segInfo = readSegInfo(fileName)
-        if (file.exists() && segInfo != null) {
-            val mediaSource = createSegmentedMediaSource(file, segInfo, index)
+        if (file.exists()) {
+            val mediaItem = MediaItem.Builder()
+                .setMediaId("$index")
+                .setUri(Uri.fromFile(file))
+                .build()
             withContext(Dispatchers.Main) {
-                exoPlayer.addMediaSource(mediaSource)
+                exoPlayer.addMediaSource(createLocalMediaSource(mediaItem))
             }
         }
     }
@@ -260,126 +258,9 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
         return File("${ttsFolderPath}$fileName.mp3.seginfo")
     }
 
-    private fun hasSegInfo(fileName: String): Boolean {
-        return getSegInfoFile(fileName).exists()
-    }
-
-    private fun writeSegInfo(fileName: String, ranges: List<Pair<Long, Long>>) {
-        val jsonArray = org.json.JSONArray()
-        ranges.forEach { (offset, length) ->
-            val obj = org.json.JSONObject()
-            obj.put("offset", offset)
-            obj.put("length", length)
-            jsonArray.put(obj)
-        }
-        getSegInfoFile(fileName).writeText(jsonArray.toString())
-    }
-
-    private fun readSegInfo(fileName: String): List<Pair<Long, Long>>? {
-        val file = getSegInfoFile(fileName)
-        if (!file.exists()) return null
-        return try {
-            val jsonArray = org.json.JSONArray(file.readText())
-            val list = mutableListOf<Pair<Long, Long>>()
-            for (i in 0 until jsonArray.length()) {
-                val obj = jsonArray.getJSONObject(i)
-                list.add(obj.getLong("offset") to obj.getLong("length"))
-            }
-            list
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    /**
-     * 分段文件数据源：只读取父文件的指定字节范围，
-     * 使 ExoPlayer 把每段当作独立音频解码，支持跨格式/采样率混排。
-     */
-    private class SegmentDataSource(
-        private val file: File,
-        private val startPosition: Long,
-        private val segmentLength: Long
-    ) : BaseDataSource(/* isNetwork = */ false) {
-        private var randomAccessFile: RandomAccessFile? = null
-        private var bytesRemaining: Long = 0
-
-        @Throws(java.io.IOException::class)
-        override fun open(dataSpec: DataSpec): Long {
-            transferInitializing(dataSpec)
-            randomAccessFile = RandomAccessFile(file, "r")
-            randomAccessFile!!.seek(startPosition)
-            bytesRemaining = segmentLength
-            transferStarted(dataSpec)
-            return bytesRemaining
-        }
-
-        @Throws(java.io.IOException::class)
-        override fun read(buffer: ByteArray, offset: Int, readLength: Int): Int {
-            if (readLength == 0) return 0
-            if (bytesRemaining == 0L) return C.RESULT_END_OF_INPUT
-            val bytesToRead = readLength.toLong().coerceAtMost(bytesRemaining).toInt()
-            val read = randomAccessFile!!.read(buffer, offset, bytesToRead)
-            if (read == -1) return C.RESULT_END_OF_INPUT
-            bytesRemaining -= read
-            bytesTransferred(read)
-            return read
-        }
-
-        override fun close() {
-            randomAccessFile?.close()
-            randomAccessFile = null
-            transferEnded()
-        }
-
-        override fun getUri(): Uri? = Uri.fromFile(file)
-    }
-
-    private class SegmentDataSourceFactory(
-        private val file: File,
-        private val startPosition: Long,
-        private val segmentLength: Long
-    ) : DataSource.Factory {
-        override fun createDataSource(): DataSource {
-            return SegmentDataSource(file, startPosition, segmentLength)
-        }
-    }
-
-    /**
-     * 将带 .seginfo 的单个音频文件组合为 ConcatenatingMediaSource2。
-     * 每段使用独立的 SegmentDataSource 限制读取范围，
-     * ExoPlayer 仍为整段播放，onMediaItemTransition 只在全部子段播完后触发。
-     */
-    private fun createSegmentedMediaSource(
-        file: File,
-        segInfo: List<Pair<Long, Long>>,
-        index: Int
-    ): MediaSource {
-        val builder = ConcatenatingMediaSource2.Builder()
-            .setMediaItem(
-                MediaItem.Builder()
-                    .setMediaId("$index")
-                    .setUri(Uri.fromFile(file))
-                    .build()
-            )
-        segInfo.forEach { (offset, length) ->
-            val factory = SegmentDataSourceFactory(file, offset, length)
-            val mediaItem = MediaItem.Builder()
-                .setUri(Uri.fromFile(file))
-                .setMediaId(file.name)
-                .build()
-            builder.add(
-                ProgressiveMediaSource.Factory(
-                    factory,
-                    if (isWavFile(mediaItem.localConfiguration?.uri?.path)) {
-                        ExtractorsFactory { arrayOf(WavExtractor()) }
-                    } else {
-                        androidx.media3.extractor.DefaultExtractorsFactory()
-                    }
-                ).createMediaSource(mediaItem),
-                3000
-            )
-        }
-        return builder.build()
+    /** 删除历史遗留的 .seginfo 伴随文件（分段播放机制已废弃） */
+    private fun removeLegacySegInfo(fileName: String) {
+        getSegInfoFile(fileName).delete()
     }
 
     override fun onCreate() {
@@ -566,22 +447,14 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                     val currentTitle = textChapter?.chapter?.title ?: ""
                     val fileName = getFileNameHelper(currentTitle, text, index)
 
-                    // 优先检查分段信息缓存
-                    if (hasSegInfo(fileName)) {
-                        AppLog.put("HttpTTS分段缓存命中: $fileName")
-                        val file = getSpeakFileAsMd5(fileName)
-                        val segInfo = readSegInfo(fileName)
-                        if (file.exists() && segInfo != null) {
-                            val mediaSource = createSegmentedMediaSource(file, segInfo, index)
-                            launch(Dispatchers.Main) {
-                                exoPlayer.addMediaSource(mediaSource)
-                            }
-                        }
-                        return@forEachIndexed
-                    }
-                    // 再检查单文件缓存
+                    // 检查单文件缓存（统一整文件播放。
+                    // 废弃按 .seginfo 切段播放：转发器输出本是完整音频，
+                    // seginfo 记录的是 WebSocket 网络分片边界而非真实音频段边界，
+                    // 按其切段会在段边界处因子段无 RIFF 头导致 WavExtractor 解析失败报错）
                     if (hasSpeakFile(fileName)) {
                         AppLog.put("HttpTTS缓存命中: $fileName")
+                        // 自动清理历史遗留的 .seginfo（旧版分段机制产物，会导致切段播放报错）
+                        removeLegacySegInfo(fileName)
                         val file = getSpeakFileAsMd5(fileName)
                         if (file.exists()) {
                             val mediaItem = MediaItem.Builder()
@@ -754,7 +627,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
 
                     if (speakText.isEmpty()) {
                         if (!hasSpeakFile(fileName)) createSilentSound(fileName)
-                    } else if (!hasSegInfo(fileName) && !hasSpeakFile(fileName)) {
+                    } else if (!hasSpeakFile(fileName)) {
                         AppLog.putDebug("TTS预下载音频: $fileName")
                         runCatching {
                             when (val speakResult = getSpeakStreamResult(httpTts, speakText)) {
@@ -768,15 +641,11 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                                             val out = java.io.ByteArrayOutputStream()
                                             speakResult.segments.forEach { out.write(it) }
                                             createSpeakFile(fileName, ByteArrayInputStream(out.toByteArray()))
-                                            val ranges = speakResult.ranges.map { it.first.toLong() to it.second.toLong() }
-                                            writeSegInfo(fileName, ranges)
                                         }
                                     } else {
                                         val out = java.io.ByteArrayOutputStream()
                                         speakResult.segments.forEach { out.write(it) }
                                         createSpeakFile(fileName, ByteArrayInputStream(out.toByteArray()))
-                                        val ranges = speakResult.ranges.map { it.first.toLong() to it.second.toLong() }
-                                        writeSegInfo(fileName, ranges)
                                     }
                                 }
                                 is TtsSpeakResult.Single -> {
@@ -970,7 +839,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                     val fileName = getFileNameHelper(chapter.title, segmentText, segIdx)
                     val speakText = purifySpeakText(segmentText)
                         .replace(AppPattern.notReadAloudRegex, "")
-                    if (hasSegInfo(fileName) || hasSpeakFile(fileName)) return@forEachIndexed
+                    if (hasSpeakFile(fileName)) return@forEachIndexed
                     when (val speakResult = getSpeakStreamResult(httpTts, speakText)) {
                         is TtsSpeakResult.MultiSegment -> {
                             if (AppConfig.convertCacheToWav) {
@@ -982,15 +851,11 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                                     val out = java.io.ByteArrayOutputStream()
                                     speakResult.segments.forEach { out.write(it) }
                                     createSpeakFile(fileName, ByteArrayInputStream(out.toByteArray()))
-                                    val ranges = speakResult.ranges.map { it.first.toLong() to it.second.toLong() }
-                                    writeSegInfo(fileName, ranges)
                                 }
                             } else {
                                 val out = java.io.ByteArrayOutputStream()
                                 speakResult.segments.forEach { out.write(it) }
                                 createSpeakFile(fileName, ByteArrayInputStream(out.toByteArray()))
-                                val ranges = speakResult.ranges.map { it.first.toLong() to it.second.toLong() }
-                                writeSegInfo(fileName, ranges)
                             }
                         }
                         is TtsSpeakResult.Single, is TtsSpeakResult.Url -> {
@@ -1164,10 +1029,38 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                 i++
             }
             if (headers.isEmpty()) return listOf(data)
+            // 【严格校验】PCM 语音数据中可能巧合出现假音频头字节模式（如静音段重复字节），
+            // 导致单个完整音频被误判为多段、被错误切段播放（在假边界处解析失败报错）。
+            // 真正的多段拼接中，每个子音频自带头部且其声明的长度必须与下一头位置/文件尾吻合；
+            // 假头几乎不可能满足该约束，据此过滤。
+            val verified = headers.filterIndexed { idx, pos ->
+                val nextHead = headers.getOrNull(idx + 1) ?: data.size
+                when {
+                    // WAV: RIFF size 字段声明 8+size 为整段长度
+                    data[pos] == 'R'.code.toByte() && pos + 8 <= data.size -> {
+                        val riffSize = ((data[pos + 4].toInt() and 0xFF) or
+                                ((data[pos + 5].toInt() and 0xFF) shl 8) or
+                                ((data[pos + 6].toInt() and 0xFF) shl 16) or
+                                ((data[pos + 7].toInt() and 0xFF) shl 24)).toLong() and 0xFFFFFFFFL
+                        val declaredEnd = pos + 8 + riffSize
+                        // 声明长度需与下一头/文件尾吻合（WAV 允许 1 字节奇数填充）
+                        declaredEnd == nextHead.toLong() || declaredEnd == data.size.toLong() ||
+                                (declaredEnd + 1 == nextHead.toLong()) || (declaredEnd + 1 == data.size.toLong())
+                    }
+                    // ID3: syncsafe size 字段声明 10+size 为标签长度，
+                    // 其后才是音频帧数据，边界必然落在下一头/文件尾之前，此处不精确校验，
+                    // 但要求下一个头不能紧贴在 ID3 头部内（>pos+10）
+                    data[pos] == 'I'.code.toByte() && data[pos + 1] == 'D'.code.toByte() -> nextHead > pos + 10
+                    // OGG/FLAC 等流格式无法用长度校验：要求下一头位置不能太近（真音频段远大于几十字节）
+                    else -> nextHead - pos > 64
+                }
+            }
+            // 校验后只剩 0 或 1 个可信头：不拆分，按单个完整音频处理
+            if (verified.size <= 1) return listOf(data)
             val result = mutableListOf<ByteArray>()
-            for (idx in headers.indices) {
-                val start = headers[idx]
-                val end = if (idx + 1 < headers.size) headers[idx + 1] else data.size
+            for (idx in verified.indices) {
+                val start = verified[idx]
+                val end = if (idx + 1 < verified.size) verified[idx + 1] else data.size
                 if (end > start) {
                     result.add(data.copyOfRange(start, end))
                 }

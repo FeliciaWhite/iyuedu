@@ -1508,7 +1508,7 @@ class ReadBookActivity : BaseReadBookActivity(),
         }
         val ageOptions = listOf(
             "", "男童", "少年", "男青年", "男中年", "男老年",
-            "女童", "少女", "女青年", "女中年", "女老年", "主角"
+            "女童", "少女", "女青年", "女中年", "女老年", "主角", "特殊", "旁白", "系统"
         )
         val spAge = Spinner(context).apply {
             adapter = ArrayAdapter(
@@ -1652,20 +1652,48 @@ class ReadBookActivity : BaseReadBookActivity(),
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
         )
-        layout.addView(
-            spGender,
-            LinearLayout.LayoutParams(
+        // 性别 + 年龄 上下两排占左半边，右半边放删除同名角色音频按钮（占两排高度）
+        val genderAgeRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
+        }
+        val genderAgeLeft = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        spGender.layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = 4.dpToPx() }
+        spAge.layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
         )
-        layout.addView(
-            spAge,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-        )
+        genderAgeLeft.addView(spGender)
+        genderAgeLeft.addView(spAge)
+
+        val btnDeleteRoleAudio = Button(context).apply {
+            text = "删除本章同名角色音频"
+            textSize = 11f
+            setPadding(4.dpToPx(), 4.dpToPx(), 4.dpToPx(), 4.dpToPx())
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
+                .apply { marginStart = 8.dpToPx() }
+            setOnClickListener { _ ->
+                val deleted = AppConfig.deleteCurrentChapterRoleAudioCache(name)
+                android.widget.Toast.makeText(
+                    context,
+                    if (deleted > 0) "已删除 $deleted 个同名角色段落的音频缓存"
+                    else "未找到同名角色对应的音频缓存",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+        genderAgeRow.addView(genderAgeLeft)
+        genderAgeRow.addView(btnDeleteRoleAudio)
+        layout.addView(genderAgeRow)
 
         // 底部按钮行：保存 / 替换整章 / 替换全书（取消放在 AlertDialog 标准按钮）
         val btnRow = LinearLayout(context).apply {

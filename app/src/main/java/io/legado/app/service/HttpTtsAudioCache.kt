@@ -11,6 +11,7 @@ import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.config.AppConfig
 import io.legado.app.model.AiImagePersistentCache
 import io.legado.app.model.ReadAloud
+import io.legado.app.ui.book.read.page.DialogRoleManager
 import io.legado.app.utils.AudioConcatUtil
 import io.legado.app.utils.AudioConvertUtil
 import io.legado.app.utils.AudioLogCollector
@@ -339,6 +340,60 @@ object HttpTtsAudioCache {
             val httpSeg = File("${ttsFolderPath}$fileName.seginfo")
             if (httpSeg.exists() && httpSeg.delete()) deleted++
             // 2. 删除系统TTS缓存（带 index 与不带 index 两种命名）
+            val sysWithIndex = File(sysTtsCacheDir, getSysTtsFileName(chapter.title, text, index))
+            if (sysWithIndex.exists() && sysWithIndex.delete()) deleted++
+            val sysWithoutIndex = File(sysTtsCacheDir, getSysTtsFileName(chapter.title, text, -1))
+            if (sysWithoutIndex.exists() && sysWithoutIndex.delete()) deleted++
+        }
+        return deleted
+    }
+
+    /**
+     * 删除指定章节中，所有名为 [roleName] 的角色所在段落的缓存音频（HttpTTS + 系统TTS）。
+     *
+     * 段落是最小删除单位：只要某段落内出现目标名字（可能同段落出现多次同名，或同段落还有别的名字），
+     * 该段落整段音频即被删除。同名角色在同一段落出现多次时仅删除一次（按段落去重）。
+     *
+     * 复用 attachAnnotations 同源的 seq 计数规则（遇到中文左双引号 "“" 即 globalSeq++），
+     * 结合 DialogRoleManager.loadChapterCache 的 seq→角色 映射，定位目标名字覆盖的段落集合。
+     *
+     * @param roleName 目标角色姓名（按此名全文匹配本章 JSON 中的角色）
+     * @return 删除的文件数量
+     */
+    fun deleteChapterRoleAudioCache(book: Book, chapter: BookChapter, roleName: String): Int {
+        if (roleName.isBlank()) return 0
+        val segments = getChapterSegments(book, chapter)
+        if (segments.isEmpty()) return 0
+
+        // 取出本章所有名字 == roleName 的 seq 集合
+        val cache = DialogRoleManager.loadChapterCache(book.name, chapter.title)
+        if (cache.isEmpty()) return 0
+        val targetSeqs = cache.filterValues { it.name == roleName }.keys
+
+        // 用同源 seq 计数规则，把目标 seq 映射到段落 index 集合（Set 自动去重）
+        val targetParagraphs = mutableSetOf<Int>()
+        var globalSeq = 0
+        segments.forEachIndexed { paraIndex, text ->
+            text.forEach { ch ->
+                if (ch == '“') {
+                    globalSeq++
+                    if (globalSeq in targetSeqs) {
+                        targetParagraphs.add(paraIndex)
+                    }
+                }
+            }
+        }
+        if (targetParagraphs.isEmpty()) return 0
+
+        // 对命中的段落，复用逐段删除逻辑（HttpTTS + 系统TTS 两种模式）
+        var deleted = 0
+        targetParagraphs.forEach { index ->
+            val text = segments[index]
+            val fileName = getFileName(chapter.title, text, index)
+            val httpFile = File("${ttsFolderPath}$fileName.mp3")
+            if (httpFile.exists() && httpFile.delete()) deleted++
+            val httpSeg = File("${ttsFolderPath}$fileName.seginfo")
+            if (httpSeg.exists() && httpSeg.delete()) deleted++
             val sysWithIndex = File(sysTtsCacheDir, getSysTtsFileName(chapter.title, text, index))
             if (sysWithIndex.exists() && sysWithIndex.delete()) deleted++
             val sysWithoutIndex = File(sysTtsCacheDir, getSysTtsFileName(chapter.title, text, -1))

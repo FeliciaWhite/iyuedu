@@ -1061,6 +1061,17 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         return true
     }
 
+    /**
+     * 删除当前正在阅读/朗读章节中，所有名为 [roleName] 的角色所在段落的缓存音频（HttpTTS + 系统TTS）。
+     * @return 删除的文件数量（0 表示未定位到当前章节或无匹配）
+     */
+    fun deleteCurrentChapterRoleAudioCache(roleName: String): Int {
+        val book = io.legado.app.model.ReadBook.book ?: return 0
+        val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, io.legado.app.model.ReadBook.durChapterIndex)
+            ?: return 0
+        return io.legado.app.service.HttpTtsAudioCache.deleteChapterRoleAudioCache(book, chapter, roleName)
+    }
+
     // 系统TTS单句合成超时（秒），默认120秒
     var sysTtsSynthesizeTimeout: Int
         get() = try {

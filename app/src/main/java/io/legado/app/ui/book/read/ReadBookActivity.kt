@@ -24,6 +24,7 @@ import android.widget.Toast
 import androidx.activity.addCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
+import java.util.concurrent.atomic.AtomicReference
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.view.get
 import androidx.core.view.size
@@ -1457,6 +1458,7 @@ class ReadBookActivity : BaseReadBookActivity(),
         onSave: (String, String, String) -> Unit
     ) {
         val context = this
+        val dialogRef = AtomicReference<AlertDialog>()
 
         // 加载相邻角色（跨章节，前4后5凑齐9个，排除当前名字）
         val book = ReadBook.book
@@ -1665,18 +1667,84 @@ class ReadBookActivity : BaseReadBookActivity(),
             )
         )
 
-        AlertDialog.Builder(context)
+        // 底部按钮行：保存 / 替换整章 / 替换全书（取消放在 AlertDialog 标准按钮）
+        val btnRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 16.dpToPx() }
+        }
+
+        fun readInputs(): Triple<String, String, String> {
+            val n = etName.text.toString().trim()
+            val g = genderOptions.getOrNull(spGender.selectedItemPosition) ?: ""
+            val a = ageOptions.getOrNull(spAge.selectedItemPosition) ?: ""
+            return Triple(n, g, a)
+        }
+
+        val btnSave = Button(context).apply {
+            text = "保存"
+            textSize = 13f
+            setPadding(4.dpToPx(), 4.dpToPx(), 4.dpToPx(), 4.dpToPx())
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                .apply { marginEnd = 6.dpToPx() }
+            setOnClickListener { _ ->
+                val (n, g, a) = readInputs()
+                onSave(n, g, a)
+                dialogRef.get()?.dismiss()
+            }
+        }
+        val btnReplaceChapter = Button(context).apply {
+            text = "替换整章"
+            textSize = 13f
+            setPadding(4.dpToPx(), 4.dpToPx(), 4.dpToPx(), 4.dpToPx())
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                .apply { marginEnd = 6.dpToPx() }
+            setOnClickListener { _ ->
+                val (n, g, a) = readInputs()
+                AlertDialog.Builder(context)
+                    .setTitle("确认替换整章")
+                    .setMessage("将把本章所有名为「$name」的角色（姓名/性别/年龄）替换为当前输入的值，确定？")
+                    .setPositiveButton(android.R.string.ok) { _, _ ->
+                        DialogRoleManager.replaceChapterRole(bookName, chapterTitle, name, n, g, a)
+                        onSave(n, g, a)
+                        dialogRef.get()?.dismiss()
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+            }
+        }
+        val btnReplaceBook = Button(context).apply {
+            text = "替换全书"
+            textSize = 13f
+            setPadding(4.dpToPx(), 4.dpToPx(), 4.dpToPx(), 4.dpToPx())
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            setOnClickListener { _ ->
+                val (n, g, a) = readInputs()
+                AlertDialog.Builder(context)
+                    .setTitle("确认替换全书")
+                    .setMessage("将把本书所有章节中名为「$name」的角色（姓名/性别/年龄）替换为当前输入的值，确定？")
+                    .setPositiveButton(android.R.string.ok) { _, _ ->
+                        DialogRoleManager.replaceBookRole(bookName, name, n, g, a)
+                        onSave(n, g, a)
+                        dialogRef.get()?.dismiss()
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+            }
+        }
+        btnRow.addView(btnSave)
+        btnRow.addView(btnReplaceChapter)
+        btnRow.addView(btnReplaceBook)
+        layout.addView(btnRow)
+
+        val dialog = AlertDialog.Builder(context)
             .setTitle("编辑角色")
             .setView(scrollView)
-            .setPositiveButton("保存") { _, _ ->
-                onSave(
-                    etName.text.toString().trim(),
-                    genderOptions.getOrNull(spGender.selectedItemPosition) ?: "",
-                    ageOptions.getOrNull(spAge.selectedItemPosition) ?: ""
-                )
-            }
             .setNegativeButton("取消", null)
             .show()
+        dialogRef.set(dialog)
     }
 
     /**

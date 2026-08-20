@@ -1048,6 +1048,19 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         return io.legado.app.service.HttpTtsAudioCache.deleteBookChapterCache(book, chapter)
     }
 
+    /**
+     * 删除当前正在阅读/朗读章节的已识别角色缓存（AI 章节 json）。
+     * 与目录界面章节右侧删除图标使用同一套路径与特殊字符规则（AiCacheFileUtil）。
+     * @return true 表示成功删除（或本就没有该文件），false 表示无法定位当前章节
+     */
+    fun deleteCurrentChapterRoleCache(): Boolean {
+        val book = io.legado.app.model.ReadBook.book ?: return false
+        val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, io.legado.app.model.ReadBook.durChapterIndex)
+            ?: return false
+        io.legado.app.ui.book.toc.AiCacheFileUtil.deleteChapterCache(book, chapter)
+        return true
+    }
+
     // 系统TTS单句合成超时（秒），默认120秒
     var sysTtsSynthesizeTimeout: Int
         get() = try {

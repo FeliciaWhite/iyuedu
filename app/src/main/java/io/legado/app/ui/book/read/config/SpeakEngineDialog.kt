@@ -6,6 +6,7 @@ import androidx.appcompat.app.AlertDialog
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ArrayAdapter
 import android.widget.RadioButton
 import androidx.appcompat.widget.Toolbar
 import androidx.fragment.app.viewModels
@@ -254,11 +255,31 @@ class SpeakEngineDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
         fun showClearCacheDialog(context: Context) {
             val items = arrayOf(
                 context.getString(R.string.clear_tts_cache_all),
-                context.getString(R.string.clear_tts_cache_current_chapter)
+                context.getString(R.string.clear_tts_cache_current_chapter),
+                context.getString(R.string.clear_tts_role_current_chapter)
             )
+            // 自定义适配器：增大每个选项的上下间距（约原默认行高的 130%）以防误触
+            val adapter = object : ArrayAdapter<String>(
+                context,
+                android.R.layout.simple_list_item_1,
+                android.R.id.text1,
+                items
+            ) {
+                override fun getView(
+                    position: Int,
+                    convertView: android.view.View?,
+                    parent: android.view.ViewGroup
+                ): android.view.View {
+                    val view = super.getView(position, convertView, parent) as android.widget.TextView
+                    val padV = (16.8f * context.resources.displayMetrics.density).toInt() // 原约12.9dp -> 130%
+                    view.setPadding(view.paddingLeft, padV, view.paddingRight, padV)
+                    view.gravity = android.view.Gravity.CENTER_VERTICAL
+                    return view
+                }
+            }
             AlertDialog.Builder(context)
                 .setTitle(R.string.clear_tts_cache_title)
-                .setItems(items) { _, which ->
+                .setAdapter(adapter) { _, which ->
                     kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                         ReadAloud.upReadAloudClass()
                         when (which) {
@@ -279,6 +300,19 @@ class SpeakEngineDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
                                         context.getString(R.string.clear_tts_cache_no_chapter)
                                     } else {
                                         context.getString(R.string.clear_tts_cache_current_done, count)
+                                    }
+                                    android.widget.Toast.makeText(
+                                        context, msg, android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                            2 -> {
+                                val deleted = AppConfig.deleteCurrentChapterRoleCache()
+                                withContext(Dispatchers.Main) {
+                                    val msg = if (!deleted) {
+                                        context.getString(R.string.clear_tts_cache_no_chapter)
+                                    } else {
+                                        context.getString(R.string.clear_tts_role_current_done)
                                     }
                                     android.widget.Toast.makeText(
                                         context, msg, android.widget.Toast.LENGTH_SHORT

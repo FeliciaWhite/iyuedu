@@ -133,6 +133,105 @@ object DialogRoleManager {
         memoryCache.remove("$bookName|$chapterTitle")
     }
 
+    /**
+     * 将当前章节 JSON 中所有名为 [oldName] 的角色（姓名/性别/年龄）替换为新值。
+     * 按旧名字全文搜索匹配，不依赖 seq。只作用于当前章节。
+     */
+    fun replaceChapterRole(
+        bookName: String,
+        chapterTitle: String,
+        oldName: String,
+        name: String,
+        gender: String,
+        age: String
+    ) {
+        val file = getCacheFile(bookName, chapterTitle)
+        if (!file.exists()) return
+        val json = try {
+            JSONObject(file.readText())
+        } catch (e: Exception) {
+            return
+        }
+        val results = json.optJSONObject("results") ?: return
+        var changed = false
+        results.keys().forEach { key ->
+            val obj = results.optJSONObject(key) ?: return@forEach
+            if (obj.optString("name", "") == oldName) {
+                obj.put("name", name)
+                obj.put("gender", gender)
+                obj.put("age", age)
+                changed = true
+            }
+        }
+        if (!changed) return
+        file.writeText(json.toString(2))
+
+        // 同步刷新内存缓存
+        val cacheKey = "$bookName|$chapterTitle"
+        val map = memoryCache[cacheKey]?.toMutableMap() ?: return
+        map.values.forEach { role ->
+            if (role.name == oldName) {
+                role.name = name
+                role.gender = gender
+                role.age = age
+            }
+        }
+        memoryCache[cacheKey] = map
+    }
+
+    /**
+     * 将全本书所有章节 JSON 中名为 [oldName] 的角色（姓名/性别/年龄）替换为新值。
+     * 按旧名字全文搜索匹配，遍历本书目录下所有 .json 文件的所有角色。
+     * 书名目录沿用 sanitizeFileName 规则，确保与生成 json 时一致。
+     */
+    fun replaceBookRole(
+        bookName: String,
+        oldName: String,
+        name: String,
+        gender: String,
+        age: String
+    ) {
+        val bookFolder = File(CACHE_ROOT + sanitizeFileName(bookName))
+        if (!bookFolder.exists() || !bookFolder.isDirectory) return
+        val jsonFiles = bookFolder.listFiles { f ->
+            f.isFile && f.extension.lowercase() == "json"
+        } ?: return
+
+        jsonFiles.forEach { file ->
+            val json = try {
+                JSONObject(file.readText())
+            } catch (e: Exception) {
+                return@forEach
+            }
+            val results = json.optJSONObject("results") ?: return@forEach
+            var changed = false
+            results.keys().forEach { key ->
+                val obj = results.optJSONObject(key) ?: return@forEach
+                if (obj.optString("name", "") == oldName) {
+                    obj.put("name", name)
+                    obj.put("gender", gender)
+                    obj.put("age", age)
+                    changed = true
+                }
+            }
+            if (!changed) return@forEach
+            file.writeText(json.toString(2))
+
+            // 同步刷新内存缓存（文件名即章节名去扩展名）
+            val chapterTitle = file.nameWithoutExtension
+            val cacheKey = "$bookName|$chapterTitle"
+            val map = memoryCache[cacheKey]?.toMutableMap() ?: return@forEach
+            map.values.forEach { role ->
+                if (role.name == oldName) {
+                    role.name = name
+                    role.gender = gender
+                    role.age = age
+                }
+            }
+            memoryCache[cacheKey] = map
+        }
+    }
+
     fun collectNeighborRoles(
         bookName: String,
         chapterTitle: String,

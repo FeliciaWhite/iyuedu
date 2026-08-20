@@ -187,6 +187,9 @@
     <string name="clear_tts_cache_current_chapter">Delete only current chapter cache</string>
     <string name="clear_tts_cache_current_done">Deleted %d cache files of current chapter</string>
     <string name="clear_tts_cache_no_chapter">Current chapter not located</string>
+    <string name="clear_tts_role_current_chapter">Delete only current chapter recognized roles</string>
+    <string name="clear_tts_role_current_done">Deleted recognized roles of current chapter</string>
+    <string name="clear_tts_role_current_none">No recognized roles in current chapter</string>
     <string name="action_save">Save</string>
     <string name="edit_source">Edit source</string>
     <string name="edit_book_source">Edit Book source</string>

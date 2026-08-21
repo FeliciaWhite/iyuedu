@@ -22,7 +22,7 @@ object DatabaseMigrations {
             migration_39_40, migration_40_41,             migration_41_42,             migration_42_43,
             migration_89_90,
             migration_90_91, migration_91_92, migration_92_93, migration_93_94,
-            migration_94_95, migration_95_96, migration_96_97, migration_97_98,
+            migration_94_95, migration_95_96, migration_96_97, migration_97_98, migration_98_99,
         )
     }
 
@@ -508,6 +508,15 @@ object DatabaseMigrations {
                     ELSE (SELECT COALESCE(MAX(t2.sortOrder), 0) FROM `aiImageTemplate` t2 WHERE t2.isDefault = 1) + `id`
                 END
             """)
+        }
+    }
+
+    private val migration_98_99 = object : Migration(98, 99) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // AI 生图模板新增「严格格式」开关字段：默认关闭，开启后只发送接口白名单字段，
+            // 避免 tokenrhythm.studio 等严格校验「未知字段」的服务返回 400。
+            // 必须显式加列并配套 98→99 迁移，否则 Room schema 校验与旧版数据库结构不一致会导致闪退。
+            db.execSQL("ALTER TABLE `aiImageTemplate` ADD `strictFormat` INTEGER NOT NULL DEFAULT 0")
         }
     }
 

@@ -61,6 +61,7 @@ class AiImageSettingsDialog : BaseDialogFragment(0) {
     /** 测试连接旁的开关：开启后使用 base64 方式获取图片（请求体附带 response_format=b64_json） */
     private lateinit var switchBase64: SwitchCompat
     private lateinit var switchAnnotate: SwitchCompat
+    private lateinit var switchStrictFormat: SwitchCompat
 
     @SuppressLint("SetTextI18n")
     override fun onCreateView(
@@ -467,6 +468,7 @@ sk-aaa@@sk-bbb@@sk-ccc
                             promptTemplate = etPromptTemplate.text?.toString()?.trim().orEmpty(),
                             negativePrompt = etNegativePrompt.text?.toString()?.trim().orEmpty(),
                             useBase64Response = switchBase64.isChecked,
+                            strictFormat = switchStrictFormat.isChecked,
                         )
                     }
                     result.onSuccess {
@@ -478,7 +480,7 @@ sk-aaa@@sk-bbb@@sk-ccc
             }
         }
 
-        // 测试连接按钮 + base64 开关（同一行）
+        // 第一行：测试连接上方 —— Base64 方式开关 + 严格格式开关（同一行）
         val testRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -509,15 +511,35 @@ sk-aaa@@sk-bbb@@sk-ccc
             base64LabelWrap,
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         )
-        testRow.addView(
-            btnTest,
-            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                marginStart = 8.dpToPx()
+
+        // 严格格式开关：默认关闭，开启后只发送接口白名单字段，避免严格校验接口返回未知字段错误
+        switchStrictFormat = SwitchCompat(context)
+        switchStrictFormat.setOnCheckedChangeListener { _, isChecked ->
+            val template = currentTemplate ?: return@setOnCheckedChangeListener
+            currentTemplate = template.copy(strictFormat = isChecked)
+            lifecycleScope.launch(Dispatchers.IO) {
+                appDb.aiImageTemplateDao.insert(currentTemplate!!)
             }
+        }
+        val strictLabel = TextView(context).apply {
+            text = "严格格式"
+            textSize = 14f
+            setPadding(16.dpToPx(), 0, 6.dpToPx(), 0)
+        }
+        val strictLabelWrap = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setOnClickListener { switchStrictFormat.isChecked = !switchStrictFormat.isChecked }
+        }
+        strictLabelWrap.addView(strictLabel)
+        strictLabelWrap.addView(switchStrictFormat)
+        testRow.addView(
+            strictLabelWrap,
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         )
         root.addView(testRow)
 
-        // 角色标注开关
+        // 角色标注开关 + 测试连接按钮（同一行）
         switchAnnotate = SwitchCompat(context)
         val annotateLabel = TextView(context).apply {
             text = "角色标注"
@@ -556,6 +578,13 @@ sk-aaa@@sk-bbb@@sk-ccc
         annotateLabelWrap.addView(annotateHelp)
         annotateRow.addView(annotateLabelWrap)
         annotateRow.addView(switchAnnotate)
+        // 测试连接按钮放右侧，占据剩余宽度
+        annotateRow.addView(
+            btnTest,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = 8.dpToPx()
+            }
+        )
         root.addView(annotateRow)
 
         val btnResetPrompt = Button(context).apply {
@@ -659,6 +688,16 @@ sk-aaa@@sk-bbb@@sk-ccc
                 appDb.aiImageTemplateDao.insert(currentTemplate!!)
             }
         }
+        // 同步严格格式开关状态（临时移除 listener 避免触发保存）
+        switchStrictFormat.setOnCheckedChangeListener(null)
+        switchStrictFormat.isChecked = template.strictFormat
+        switchStrictFormat.setOnCheckedChangeListener { _, isChecked ->
+            val tmpl = currentTemplate ?: return@setOnCheckedChangeListener
+            currentTemplate = tmpl.copy(strictFormat = isChecked)
+            lifecycleScope.launch(Dispatchers.IO) {
+                appDb.aiImageTemplateDao.insert(currentTemplate!!)
+            }
+        }
         // 记住上次编辑的模板
         appCtx.putPrefString(PreferKey.aiImageLastEditTemplateId, template.id.toString())
         // 更新绑定开关状态
@@ -753,6 +792,7 @@ sk-aaa@@sk-bbb@@sk-ccc
             filterWords = etFilterWords.text?.toString()?.trim().orEmpty(),
             useBase64Response = switchBase64.isChecked,
             annotateRoles = switchAnnotate.isChecked,
+            strictFormat = switchStrictFormat.isChecked,
             lastUpdateTime = System.currentTimeMillis()
         )
 

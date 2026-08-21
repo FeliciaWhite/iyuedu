@@ -1711,17 +1711,18 @@ class ReadBookActivity : BaseReadBookActivity(),
             return Triple(n, g, a)
         }
 
+        val doSave: () -> Unit = {
+            val (n, g, a) = readInputs()
+            onSave(n, g, a)
+            dialogRef.get()?.dismiss()
+        }
         val btnSave = Button(context).apply {
             text = "保存"
             textSize = 13f
             setPadding(4.dpToPx(), 4.dpToPx(), 4.dpToPx(), 4.dpToPx())
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
                 .apply { marginEnd = 6.dpToPx() }
-            setOnClickListener { _ ->
-                val (n, g, a) = readInputs()
-                onSave(n, g, a)
-                dialogRef.get()?.dismiss()
-            }
+            setOnClickListener { _ -> doSave() }
         }
         val btnReplaceChapter = Button(context).apply {
             text = "替换整章"
@@ -1770,6 +1771,7 @@ class ReadBookActivity : BaseReadBookActivity(),
         val dialog = AlertDialog.Builder(context)
             .setTitle("编辑角色")
             .setView(scrollView)
+            .setPositiveButton("保存") { _, _ -> doSave() }
             .setNegativeButton("取消", null)
             .show()
         dialogRef.set(dialog)

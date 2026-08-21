@@ -45,6 +45,14 @@ data class AiImageTemplate(
      */
     @ColumnInfo(defaultValue = "0")
     var annotateRoles: Boolean = false,
+    /**
+     * 是否使用严格格式请求。
+     * 开启后只发送 API 白名单字段（按接口类型选择 size/image_size，不发 negative_prompt 等额外字段），
+     * 适用于 tokenrhythm.studio 等严格校验"未知字段"的生图服务，避免返回 400。
+     * 关闭则维持同时发送 image_size/size/negative_prompt 的兼容模式。
+     */
+    @ColumnInfo(defaultValue = "0")
+    var strictFormat: Boolean = false,
     @ColumnInfo(defaultValue = "0")
     var lastUpdateTime: Long = System.currentTimeMillis(),
     /**

@@ -888,6 +888,54 @@ object AiImageGenerator {
         return result
     }
 
+    /**
+     * 构造生图请求体。
+     *
+     * @param strictFormat 是否严格格式。
+     *  - false（默认兼容模式）：同时发送 image_size、size、negative_prompt 等多个字段，
+     *    兼容 SiliconFlow、OpenAI 等"忽略未知字段"的宽松接口。
+     *  - true（严格格式）：只发送对应接口白名单字段，避免 tokenrhythm.studio 等
+     *    严格校验"未知字段"的服务返回 HTTP 400。此时：
+     *      * 含 siliconflow 的地址使用 image_size，其余使用 size；
+     *      * 不发送 negative_prompt（即使填写）；
+     *      * n 仍发送（主流接口均支持），base64 开关按需发送。
+     */
+    private fun buildImageRequestBody(
+        modelName: String,
+        imageSize: String,
+        prompt: String,
+        negativePrompt: String,
+        useBase64Response: Boolean,
+        strictFormat: Boolean,
+        modelUrl: String,
+    ): MutableMap<String, Any> {
+        val body = mutableMapOf<String, Any>(
+            "model" to modelName,
+            "prompt" to prompt,
+            "n" to 1,
+        )
+        if (strictFormat) {
+            // 严格格式：按接口类型只发一个尺寸字段
+            if (modelUrl.contains("siliconflow", ignoreCase = true)) {
+                body["image_size"] = imageSize
+            } else {
+                body["size"] = imageSize
+            }
+        } else {
+            // 兼容格式：同时发送两种尺寸字段 + 负面提示词
+            body["image_size"] = imageSize
+            body["size"] = imageSize
+            if (negativePrompt.isNotBlank()) {
+                body["negative_prompt"] = negativePrompt
+            }
+        }
+        // 开启 base64 模式：要求 API 直接返回 base64 图片数据
+        if (useBase64Response) {
+            body["response_format"] = "b64_json"
+        }
+        return body
+    }
+
     private suspend fun callImageApi(
         template: AiImageTemplate,
         modelKey: String,
@@ -905,22 +953,18 @@ object AiImageGenerator {
             "Bearer ${modelKey.trim()}"
         } else null
 
-        // 构造请求体：同时包含各主流格式的字段，兼容所有生图服务
-        // 硅基流动用 image_size，OpenAI DALL-E 用 size，各服务各取所需，忽略不认识的字段
-        val body = mutableMapOf<String, Any>(
-            "model" to template.modelName.trim(),
-            "prompt" to prompt,
-            "image_size" to template.imageSize,
-            "size" to template.imageSize,
-            "n" to 1,
+        // 构造请求体：根据模板配置决定字段集
+        // 严格格式：只发对应接口白名单字段，避免 tokenrhythm.studio 等严格校验"未知字段"报错
+        // 兼容格式：同时包含各主流格式的字段（image_size / size / negative_prompt），兼容所有生图服务
+        val body = buildImageRequestBody(
+            modelName = template.modelName.trim(),
+            imageSize = template.imageSize,
+            prompt = prompt,
+            negativePrompt = template.negativePrompt,
+            useBase64Response = template.useBase64Response,
+            strictFormat = template.strictFormat,
+            modelUrl = url,
         )
-        if (template.negativePrompt.isNotBlank()) {
-            body["negative_prompt"] = template.negativePrompt
-        }
-        // 开启 base64 模式：要求 API 直接返回 base64 图片数据，避免临时 URL 秒级过期无法下载
-        if (template.useBase64Response) {
-            body["response_format"] = "b64_json"
-        }
         val bodyJson = GSON.toJson(body)
         val requestBody = bodyJson.toRequestBody("application/json; charset=utf-8".toMediaType())
 
@@ -1175,6 +1219,7 @@ object AiImageGenerator {
         promptTemplate: String,
         negativePrompt: String,
         useBase64Response: Boolean = false,
+        strictFormat: Boolean = false,
     ): Result<File> {
         // 测试连接发送请求前，先激活当前 TTS 引擎
         // 后台 TTS 常被系统回收/关闭，提前激活以保证朗读在测试期间不中断
@@ -1206,20 +1251,15 @@ object AiImageGenerator {
             val testKey = parseKeys(modelKey).firstOrNull() ?: ""
             val authHeader = if (testKey.isNotBlank()) "Bearer ${testKey.trim()}" else null
 
-            val body = mutableMapOf<String, Any>(
-                "model" to modelName.trim(),
-                "prompt" to testPrompt,
-                "image_size" to imageSize,
-                "size" to imageSize,
-                "n" to 1,
+            val body = buildImageRequestBody(
+                modelName = modelName.trim(),
+                imageSize = imageSize,
+                prompt = testPrompt,
+                negativePrompt = negativePrompt,
+                useBase64Response = useBase64Response,
+                strictFormat = strictFormat,
+                modelUrl = url,
             )
-            if (negativePrompt.isNotBlank()) {
-                body["negative_prompt"] = negativePrompt
-            }
-            // 开启 base64 模式：要求 API 直接返回 base64 图片数据
-            if (useBase64Response) {
-                body["response_format"] = "b64_json"
-            }
             val bodyJson = GSON.toJson(body)
             val requestBody = bodyJson.toRequestBody("application/json; charset=utf-8".toMediaType())
 

@@ -1,0 +1,126 @@
+{
+  "format": "jread_voice_config_bundle",
+  "version": 1,
+  "configs": [
+    {
+      "id": "builtin-jread-narration",
+      "voiceTag": "旁白",
+      "groupName": "基础发声",
+      "subGroupName": "旁白",
+      "displayName": "默认旁白",
+      "pluginId": "maoxiang.tts.gj_v35",
+      "locale": "pro",
+      "voice": "zh_female_vv_uranus_bigtts",
+      "data": {
+        "contextTexts": "[#设定:中文小说旁白。语气稳定、清楚、自然，适合长篇有声书叙述。]",
+        "emotion": "",
+        "emotionScale": "4",
+        "audioFormat": "pcm",
+        "sampleRate": "48000"
+      },
+      "speed": 0.95,
+      "volume": 1.5,
+      "pitch": 1,
+      "enabled": true
+    },
+    {
+      "id": "builtin-jread-bracket-1",
+      "voiceTag": "括号1",
+      "groupName": "基础发声",
+      "subGroupName": "括号",
+      "displayName": "【】括号/章节标题",
+      "pluginId": "maoxiang.tts.gj_v35",
+      "locale": "pro",
+      "voice": "zh_female_vv_uranus_bigtts",
+      "data": {
+        "contextTexts": "[#设定:章节标题、系统提示、【】括号内容。读得短促清楚，不拖腔。]",
+        "emotion": "",
+        "emotionScale": "3",
+        "audioFormat": "pcm",
+        "sampleRate": "48000"
+      },
+      "speed": 0.98,
+      "volume": 1.45,
+      "pitch": 1,
+      "enabled": true
+    },
+    {
+      "id": "builtin-jread-bracket-2",
+      "voiceTag": "括号2",
+      "groupName": "基础发声",
+      "subGroupName": "括号",
+      "displayName": "〖〗括号发音人",
+      "pluginId": "maoxiang.tts.gj_v35",
+      "locale": "pro",
+      "voice": "zh_female_vv_uranus_bigtts",
+      "data": {
+        "contextTexts": "[#设定:〖〗括号内容。清楚短句，作为提示或补充说明朗读。]",
+        "emotion": "",
+        "emotionScale": "3",
+        "audioFormat": "pcm",
+        "sampleRate": "48000"
+      },
+      "speed": 0.98,
+      "volume": 1.45,
+      "pitch": 1,
+      "enabled": true
+    },
+    {
+      "id": "builtin-jread-bracket-3",
+      "voiceTag": "括号3",
+      "groupName": "基础发声",
+      "subGroupName": "括号",
+      "displayName": "「」括号发音人",
+      "pluginId": "maoxiang.tts.gj_v35",
+      "locale": "pro",
+      "voice": "zh_female_vv_uranus_bigtts",
+      "data": {
+        "contextTexts": "[#设定:「」括号内容。保持中性、清楚，不加入额外情绪。]",
+        "emotion": "",
+        "emotionScale": "3",
+        "audioFormat": "pcm",
+        "sampleRate": "48000"
+      },
+      "speed": 0.98,
+      "volume": 1.45,
+      "pitch": 1,
+      "enabled": true
+    },
+    {
+      "id": "builtin-jread-bracket-4",
+      "voiceTag": "括号4",
+      "groupName": "基础发声",
+      "subGroupName": "括号",
+      "displayName": "『』引号旁白",
+      "pluginId": "maoxiang.tts.gj_v35",
+      "locale": "pro",
+      "voice": "zh_female_vv_uranus_bigtts",
+      "data": {
+        "contextTexts": "[#设定:对话之间的旁白提示。自然衔接，不抢角色对白。]",
+        "emotion": "",
+        "emotionScale": "3",
+        "audioFormat": "pcm",
+        "sampleRate": "48000"
+      },
+      "speed": 0.98,
+      "volume": 1.45,
+      "pitch": 1,
+      "enabled": true
+    },
+    {
+      "id": "builtin-jread-local-sound-1",
+      "voiceTag": "localSound1",
+      "groupName": "本地音效",
+      "subGroupName": "音效",
+      "displayName": "本地音效1",
+      "pluginId": "jread.audios.1064",
+      "locale": "zh-CN",
+      "voice": "all_voices",
+      "data": {},
+      "speed": 1,
+      "volume": 1,
+      "pitch": 1,
+      "enabled": true
+    }
+  ]
+}

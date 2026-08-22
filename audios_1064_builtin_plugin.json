@@ -1,0 +1,24 @@
+{
+  "format": "jread_voice_plugin_bundle",
+  "version": 1,
+  "plugins": [
+    {
+      "id": "builtin-jread-audios-1064",
+      "name": "J阅读内置 Audios 1064 音效",
+      "pluginId": "jread.audios.1064",
+      "pluginGroupId": "jread_builtin_audio_effects",
+      "pluginGroupName": "J阅读内置音效",
+      "author": "JRead / Audios",
+      "version": "1064",
+      "code": "var PluginJS = { name: 'J阅读内置 Audios 1064 音效', getAudio: function(text, locale, voice, speed, volume, pitch) { throw 'J阅读内置音效由 native fast path 播放'; } };",
+      "defVars": {},
+      "userVars": {},
+      "method": "GET",
+      "urlTemplate": "",
+      "headersText": "",
+      "bodyTemplate": "",
+      "responseAudioPath": "",
+      "enabled": true
+    }
+  ]
+}

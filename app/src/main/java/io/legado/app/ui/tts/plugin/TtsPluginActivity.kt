@@ -141,6 +141,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
             when (currentTab) {
                 TAB_CONFIGS -> {
                     allConfigs = withContext(Dispatchers.IO) { JReadVoiceEngine.listConfigs(this@TtsPluginActivity) }
+                    android.util.Log.d("TtsPluginActivity", "loadData: configs=${allConfigs.size} groups=${allGroups.size} plugins=${allPlugins.size}")
                     binding.searchBar.visibility = View.VISIBLE
                     rebuildRows()
                 }
@@ -568,15 +569,23 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
 
     private fun doImport(uri: android.net.Uri) {
         lifecycleScope.launch {
-            val count = withContext(Dispatchers.IO) {
-                val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@withContext 0
-                when (currentTab) {
-                    TAB_CONFIGS -> JReadVoiceEngine.importConfigsFromJson(this@TtsPluginActivity, bytes.toString(Charsets.UTF_8))
-                    TAB_PLUGINS -> JReadVoiceEngine.importPluginsFromPackageBytes(this@TtsPluginActivity, bytes)
-                    else -> 0
+            try {
+                val count = withContext(Dispatchers.IO) {
+                    val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                        ?: run { toastOnUi("无法读取文件"); return@withContext 0 }
+                    when (currentTab) {
+                        TAB_CONFIGS -> {
+                            val text = bytes.toString(Charsets.UTF_8)
+                            JReadVoiceEngine.importConfigsFromJson(this@TtsPluginActivity, text)
+                        }
+                        TAB_PLUGINS -> JReadVoiceEngine.importPluginsFromPackageBytes(this@TtsPluginActivity, bytes)
+                        else -> 0
+                    }
                 }
+                toastOnUi("导入了 $count 条"); loadData()
+            } catch (e: Exception) {
+                toastOnUi("导入失败: ${e.message}")
             }
-            toastOnUi("导入了 $count 条"); loadData()
         }
     }
 

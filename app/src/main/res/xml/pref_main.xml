@@ -40,6 +40,12 @@
         app:iconSpaceReserved="false" />
 
     <io.legado.app.lib.prefs.Preference
+        android:key="hunyuanTaiji"
+        android:summary="本地 OpenAI 兼容中转服务，支持混元/豆包/Kimi/千问/智谱/DeepSeek"
+        android:title="混元太极"
+        app:iconSpaceReserved="false" />
+
+    <io.legado.app.lib.prefs.Preference
         android:icon="@drawable/ic_translate"
         android:key="dictRuleManage"
         android:summary="@string/config_dict_rule"

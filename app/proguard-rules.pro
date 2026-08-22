@@ -171,3 +171,17 @@ cn.hutool.core.util.**{*;}
     public <init>(android.content.Context, android.util.AttributeSet, int);
 }
 
+
+# Ktor missing classes
+-dontwarn java.lang.management.ManagementFactory
+-dontwarn java.lang.management.RuntimeMXBean
+
+# Ktor
+-keep class io.ktor.** { *; }
+-keep class kotlinx.serialization.** { *; }
+-keep class io.legado.app.help.hunyuan.** { *; }
+
+
+-dontwarn com.sun.nio.file.SensitivityWatchEventModifier
+-dontwarn org.slf4j.**
+

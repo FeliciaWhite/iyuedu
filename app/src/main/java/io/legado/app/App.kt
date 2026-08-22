@@ -97,6 +97,16 @@ class App : Application() {
             URL.setURLStreamHandlerFactory(ObsoleteUrlFactory(okHttpClient))
             launch { installGmsTlsProvider(appCtx) }
             initRhino()
+            // 混元太极：如果上次退出时是运行状态，自动恢复
+            try {
+                val dsPrefs = getSharedPreferences("ds_proxy", android.content.Context.MODE_PRIVATE)
+                if (dsPrefs.getBoolean("running", false)) {
+                    io.legado.app.help.hunyuan.ProxyService.startFromSaved(this@App)
+                    LogUtils.d("App", "混元太极自动恢复")
+                }
+            } catch (e: Exception) {
+                LogUtils.e("App", "混元太极自动恢复失败: ${e.message}")
+            }
             //初始化封面
             BookCover.toString()
             //清除过期数据

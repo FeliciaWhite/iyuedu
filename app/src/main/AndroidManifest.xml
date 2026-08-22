@@ -245,6 +245,14 @@
             android:name=".ui.tts.plugin.TtsPluginActivity"
             android:launchMode="singleTop"
             android:screenOrientation="behind" />
+        <activity
+            android:name=".ui.hunyuan.HunyuanTaijiActivity"
+            android:label="混元太极"
+            android:screenOrientation="behind" />
+        <service
+            android:name=".help.hunyuan.ProxyService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
         <!-- TTS 配置编辑器 -->
         <activity
             android:name=".ui.tts.plugin.TtsConfigEditorActivity"

@@ -150,6 +150,7 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config), MainFragmentInte
                 "replaceManage" -> startActivity<ReplaceRuleActivity>()
                 "ttsScriptManage" -> startActivity<TtsScriptActivity>()
                 "ttsPluginManage" -> startActivity<TtsPluginActivity>()
+                "hunyuanTaiji" -> startActivity<io.legado.app.ui.hunyuan.HunyuanTaijiActivity>()
                 "dictRuleManage" -> startActivity<DictRuleActivity>()
                 "txtTocRuleManage" -> startActivity<TxtTocRuleActivity>()
                 "bookmark" -> startActivity<AllBookmarkActivity>()

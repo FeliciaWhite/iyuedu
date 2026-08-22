@@ -45,14 +45,16 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
     }
 
     private fun initViews() {
-        binding.spinnerGender.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("女性", "男性"))
-        binding.spinnerAge.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("儿童", "少年", "青年", "中年", "老年"))
+        binding.spinnerGender.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("男", "女"))
+        binding.spinnerAge.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("童", "少年", "青年", "中年", "老年"))
         binding.btnGenerateTag.setOnClickListener { generateTimbreTag() }
         binding.btnRecognizeTag.setOnClickListener { recognizeTimbreTag() }
         binding.ivTagSearch.setOnClickListener { showTagSearchDialog() }
         binding.btnPreview.setOnClickListener { previewConfig() }
         binding.ivGroupPicker.setOnClickListener { showGroupPicker() }
         binding.ivSubGroupPicker.setOnClickListener { showSubGroupPicker() }
+        // 旧格式不需要风格，隐藏
+        binding.etStyle.visibility = View.GONE
         setupSlider(binding.seekbarSpeed, binding.tvSpeedValue)
         setupSlider(binding.seekbarVolume, binding.tvVolumeValue)
         setupSlider(binding.seekbarPitch, binding.tvPitchValue)
@@ -266,25 +268,43 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
     }
 
     private fun generateTimbreTag() {
-        val gender = binding.spinnerGender.selectedItem?.toString() ?: "女性"
+        val gender = binding.spinnerGender.selectedItem?.toString() ?: "男"
         val age = binding.spinnerAge.selectedItem?.toString() ?: "青年"
-        val style = binding.etStyle.text.toString().trim().ifBlank { "通用" }
-        val number = binding.etTagNumber.text.toString().trim().ifBlank { "01" }
-        val tag = "${gender}${age}/${style}${number}"
+        val number = binding.etTagNumber.text.toString().trim().ifBlank { "01" }.padStart(2, '0')
+        // 旧格式: 男青年01、少女01、男童01 等
+        // 少年=男性，少女=女性，不需要性别前缀
+        val tag = when (age) {
+            "少年" -> if (gender == "女") "少女$number" else "少年$number"
+            else -> "$gender$age$number"
+        }
         binding.etVoiceTag.setText(tag)
-        if (binding.etGroup.text.isBlank()) binding.etGroup.setText("性格分组演员池")
-        if (binding.etSubGroup.text.isBlank()) binding.etSubGroup.setText("${gender}${age}")
+        if (binding.etGroup.text.isBlank()) binding.etGroup.setText("发音人")
+        if (binding.etSubGroup.text.isBlank()) {
+            val subGroup = when (age) {
+                "少年" -> if (gender == "女") "少女" else "少年"
+                else -> "$gender$age"
+            }
+            binding.etSubGroup.setText(subGroup)
+        }
         toastOnUi("已生成标签: $tag")
     }
 
     private fun recognizeTimbreTag() {
         val tag = binding.etVoiceTag.text.toString().trim()
-        val match = Regex("^(男性|女性)(儿童|少年|青年|中年|老年)/(.+?)(\\d{1,3})?$").matchEntire(tag)
+        // 旧格式: 男青年01、少女01、男童01 等
+        val match = Regex("^(男童|女童|少年|少女|男青年|女青年|男中年|女中年|男老年|女老年|特殊男|特殊女|男主|女主)(\\d{1,3})?$").matchEntire(tag)
         if (match != null) {
-            binding.spinnerGender.setSelection(listOf("女性", "男性").indexOf(match.groupValues[1]).coerceAtLeast(0))
-            binding.spinnerAge.setSelection(listOf("儿童", "少年", "青年", "中年", "老年").indexOf(match.groupValues[2]).coerceAtLeast(0))
-            binding.etStyle.setText(match.groupValues[3].trim())
-            binding.etTagNumber.setText(match.groupValues[4].ifBlank { "01" })
+            val shortAge = match.groupValues[1]
+            val (gender, age) = when {
+                shortAge.startsWith("男") -> "男" to shortAge.removePrefix("男")
+                shortAge.startsWith("女") -> "女" to shortAge.removePrefix("女")
+                shortAge == "少年" -> "男" to "少年"
+                shortAge == "少女" -> "女" to "少年"
+                else -> "男" to "青年"
+            }
+            binding.spinnerGender.setSelection(listOf("男", "女").indexOf(gender).coerceAtLeast(0))
+            binding.spinnerAge.setSelection(listOf("童", "少年", "青年", "中年", "老年").indexOf(age).coerceAtLeast(0))
+            binding.etTagNumber.setText(match.groupValues[2].ifBlank { "01" })
         }
     }
 

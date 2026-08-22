@@ -149,6 +149,30 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                     rebuildPluginRows()
                 }
             }
+            // 自动导出启用的标签到 fayinren.json
+            exportEnabledTags()
+        }
+    }
+
+    private fun exportEnabledTags() {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                try {
+                    val configs = JReadVoiceEngine.listConfigs(this@TtsPluginActivity)
+                    val tags = configs.filter { it.enabled }
+                        .map { it.voiceTag }
+                        .filter { it.isNotBlank() }
+                        .distinct()
+                        .sorted()
+                    val json = org.json.JSONArray(tags).toString(2)
+                    val dir = java.io.File("/storage/emulated/0/Download/chajian/mingwuyan")
+                    if (!dir.exists()) dir.mkdirs()
+                    val file = java.io.File(dir, "fayinren.json")
+                    file.writeText(json)
+                } catch (e: Exception) {
+                    // 忽略写入错误（可能没有存储权限）
+                }
+            }
         }
     }
 

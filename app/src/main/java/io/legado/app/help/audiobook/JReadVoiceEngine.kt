@@ -1824,17 +1824,49 @@ object JReadVoiceEngine {
         val normalized = normalizeVoiceTag(rawTag)
             .ifBlank { rawTag.trim().trimVoiceTagBrackets() }
             .replace(Regex("\\s+"), "")
-        val match = Regex("^(男性|女性)(儿童|少年|青年|中年|老年)/(.+?)(\\d{2,3})$")
+        // 旧格式: 男青年01、少女01、男童01 等
+        val oldMatch = Regex("^(男童|女童|少年|少女|男青年|女青年|男中年|女中年|男老年|女老年|特殊男|特殊女)(\\d{1,3})?$")
             .matchEntire(normalized)
-            ?: return null
-        val gender = match.groupValues[1]
-        val age = match.groupValues[2]
-        val feature = match.groupValues[3].trim().ifBlank { "通用" }
-        return TimbreConfigGroupTarget(
-            groupName = BUILTIN_VIVI_GROUP_KEY,
-            subGroupName = "$gender$age",
-            thirdGroupName = "$gender$age/$feature",
-        )
+        if (oldMatch != null) {
+            val shortAge = oldMatch.groupValues[1]
+            return TimbreConfigGroupTarget(
+                groupName = "发音人",
+                subGroupName = shortAge,
+                thirdGroupName = shortAge,
+            )
+        }
+        // 带斜杠的旧格式: 男/男青年01
+        val slashMatch = Regex("^(男|女)/(男童|女童|少年|少女|男青年|女青年|男中年|女中年|男老年|女老年|特殊)(\\d{1,3})?$")
+            .matchEntire(normalized)
+        if (slashMatch != null) {
+            val age = slashMatch.groupValues[2]
+            return TimbreConfigGroupTarget(
+                groupName = "发音人",
+                subGroupName = age,
+                thirdGroupName = age,
+            )
+        }
+        // 主角
+        val leadMatch = Regex("^主角(男主|女主)(\\d{1,3})?$").matchEntire(normalized)
+        if (leadMatch != null) {
+            val role = leadMatch.groupValues[1]
+            return TimbreConfigGroupTarget(
+                groupName = "主角",
+                subGroupName = role,
+                thirdGroupName = role,
+            )
+        }
+        // 女主01/男主01 简写
+        val simpleLeadMatch = Regex("^(男主|女主)(\\d{1,3})?$").matchEntire(normalized)
+        if (simpleLeadMatch != null) {
+            val role = simpleLeadMatch.groupValues[1]
+            return TimbreConfigGroupTarget(
+                groupName = "主角",
+                subGroupName = role,
+                thirdGroupName = role,
+            )
+        }
+        return null
     }
 
     private fun saveConfigs(context: Context, configs: List<VoiceConfig>) {
@@ -2041,18 +2073,25 @@ object JReadVoiceEngine {
         if (compact.startsWith("localSound", ignoreCase = true)) {
             return VoiceTagPool("local-sound", "本地音效")
         }
-        timbreStyleVoiceTagPool(compact)?.let { return it }
+        // 旧格式: 男青年01、少女01、男童01 等
+        Regex("^(男童|女童|少年|少女|男青年|女青年|男中年|女中年|男老年|女老年|特殊男|特殊女)(\\d{1,3})?$")
+            .matchEntire(compact)?.let {
+                return VoiceTagPool(it.groupValues[1], it.groupValues[1])
+            }
+        // 主角: 男主01、女主01
+        Regex("^(男主|女主)(\\d{1,3})?$").matchEntire(compact)?.let {
+            return VoiceTagPool("lead-${it.groupValues[1]}", "主角 ${it.groupValues[1]}")
+        }
         Regex("^主角(男主|女主)\\d{1,3}$").matchEntire(compact)?.let {
             val role = it.groupValues[1]
             return VoiceTagPool("lead-$role", "主角 $role")
         }
+        // 带斜杠的旧格式
         Regex("^(男|女)/(男童|女童|少年|少女|男青年|女青年|男中年|女中年|男老年|女老年|特殊)\\d{0,3}$")
-            .matchEntire(compact)
-            ?.let {
-                val gender = it.groupValues[1]
+            .matchEntire(compact)?.let {
                 val age = it.groupValues[2]
-                return VoiceTagPool("$gender/$age", "$gender/$age")
-        }
+                return VoiceTagPool(age, age)
+            }
         return null
     }
 
@@ -2071,30 +2110,38 @@ object JReadVoiceEngine {
         val clean = value.trim().trimVoiceTagBrackets()
         val compact = clean.replace(Regex("\\s+"), "")
         if (compact.startsWith("localSound", ignoreCase = true)) return compact
-        normalizeTimbreStyleVoiceTag(compact)?.let { return it }
+        // 旧格式直接保留: 男/男青年01 → 男青年01
         Regex("^(男|女)/(男童|女童|少年|少女|男青年|女青年|男中年|女中年|男老年|女老年|特殊)(\\d{1,3})?$")
             .matchEntire(compact)
             ?.let { match ->
                 val age = match.groupValues[2]
-                if (age == "特殊") return compact
-                return old286VoiceTagToTimbreStyleVoiceTag(compact) ?: compact
+                val index = match.groupValues[3].padStart(2, '0')
+                if (age == "特殊") return "特殊${match.groupValues[1]}$index"
+                return "$age$index"
             }
-        Regex("^(男童|女童|少年|少女|男青年|女青年|男中年|女中年|男老年|女老年|特殊男|特殊女)(\\d{1,3})?$")
+        // 旧格式: 男青年01、少女01 等，补齐编号为2位
+        Regex("^(男童|女童|少年|少女|男青年|女青年|男中年|女中年|男老年|女老年|特殊男|特殊女|男主|女主)(\\d{1,3})?$")
             .matchEntire(compact)
             ?.let { match ->
-                old286VoiceTagToTimbreStyleVoiceTag(compact)?.let { return it }
                 val shortAge = match.groupValues[1]
-                val index = match.groupValues[2]
-                val gender = when {
-                    shortAge.startsWith("女") || shortAge == "少女" || shortAge == "特殊女" -> "女"
-                    else -> "男"
-                }
-                val age = when (shortAge) {
-                    "特殊男", "特殊女" -> "特殊"
-                    else -> shortAge
-                }
-                return "$gender/$age$index"
+                val index = match.groupValues[2].padStart(2, '0')
+                return "$shortAge$index"
             }
+        // Timbre 格式迁移为旧格式: 男性青年/通用01 → 男青年01
+        normalizeTimbreStyleVoiceTag(compact)?.let { timbre ->
+            val timbreMatch = Regex("^(男性|女性)(儿童|少年|青年|中年|老年)/(.+?)(\\d{2,3})$").matchEntire(timbre)
+            if (timbreMatch != null) {
+                val gender = timbreMatch.groupValues[1]
+                val age = timbreMatch.groupValues[2]
+                val index = timbreMatch.groupValues[4]
+                val oldAge = when (gender) {
+                    "男性" -> when (age) { "儿童" -> "男童"; "少年" -> "少年"; "青年" -> "男青年"; "中年" -> "男中年"; "老年" -> "男老年"; else -> null }
+                    "女性" -> when (age) { "儿童" -> "女童"; "少年" -> "少女"; "青年" -> "女青年"; "中年" -> "女中年"; "老年" -> "女老年"; else -> null }
+                    else -> null
+                } ?: return null
+                return "$oldAge$index"
+            }
+        }
         return null
     }
 

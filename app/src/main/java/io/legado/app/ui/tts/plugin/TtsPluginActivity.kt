@@ -336,11 +336,14 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
             yesButton {
                 lifecycleScope.launch {
                     withContext(Dispatchers.IO) {
+                        // 删除该分组下所有配置
                         val configs = JReadVoiceEngine.listConfigs(this@TtsPluginActivity)
                         configs.filter { c ->
                             c.groupName.ifBlank { "默认分组" } == groupName &&
                             (subGroupName == null || c.subGroupName.ifBlank { "默认" } == subGroupName)
                         }.forEach { JReadVoiceEngine.deleteConfig(this@TtsPluginActivity, it.id) }
+                        // 删除分组记录本身
+                        JReadVoiceEngine.deleteGroup(this@TtsPluginActivity, groupName, subGroupName)
                     }
                     toastOnUi("已删除分组"); loadData()
                 }

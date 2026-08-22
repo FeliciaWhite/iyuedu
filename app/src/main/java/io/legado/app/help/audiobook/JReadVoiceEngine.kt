@@ -292,6 +292,16 @@ object JReadVoiceEngine {
         saveGroups(context, groups)
     }
 
+    fun deleteGroup(context: Context, groupName: String, subGroupName: String? = null) {
+        val cleanGroup = groupName.trim().ifBlank { "默认分组" }
+        val cleanSub = subGroupName?.trim()
+        val groups = listGroups(context).filterNot {
+            it.groupName.ifBlank { "默认分组" } == cleanGroup &&
+            (cleanSub == null || it.subGroupName.ifBlank { "默认" } == cleanSub)
+        }
+        saveGroups(context, groups)
+    }
+
     fun renameConfigGroupDisplayName(
         context: Context,
         groupName: String,

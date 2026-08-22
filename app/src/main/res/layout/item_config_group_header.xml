@@ -14,12 +14,13 @@
         android:padding="2dp"
         android:src="@drawable/ic_arrow_down" />
 
-    <CheckBox
+    <ImageView
         android:id="@+id/cb_group_enabled"
         android:layout_width="28dp"
         android:layout_height="28dp"
         android:layout_marginStart="4dp"
-        android:padding="0dp" />
+        android:padding="2dp"
+        android:background="?attr/selectableItemBackgroundBorderless" />
 
     <TextView
         android:id="@+id/tv_group_name"

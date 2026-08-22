@@ -97,7 +97,7 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     inner class GroupHeaderViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val ivExpand: ImageView = itemView.findViewById(R.id.iv_expand)
-        private val cbEnabled: CheckBox = itemView.findViewById(R.id.cb_group_enabled)
+        private val cbEnabled: ImageView = itemView.findViewById(R.id.cb_group_enabled)
         private val tvGroupName: TextView = itemView.findViewById(R.id.tv_group_name)
         private val tvCount: TextView = itemView.findViewById(R.id.tv_count)
         private val ivMore: ImageView = itemView.findViewById(R.id.iv_more)
@@ -107,9 +107,11 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             tvCount.text = "${row.configCount}项"
             ivExpand.setImageResource(if (row.expanded) R.drawable.ic_arrow_down else R.drawable.ic_arrow_right)
             itemView.setPadding(0, itemView.paddingTop, itemView.paddingRight, itemView.paddingBottom)
-            cbEnabled.setOnCheckedChangeListener(null)
-            cbEnabled.isChecked = row.allEnabled
-            cbEnabled.setOnCheckedChangeListener { _, checked -> onGroupToggleEnabled?.invoke(row.groupName, checked) }
+            updateTriState(cbEnabled, row.allEnabled, row.someEnabled)
+            cbEnabled.setOnClickListener {
+                val newState = !row.allEnabled
+                onGroupToggleEnabled?.invoke(row.groupName, newState)
+            }
             itemView.setOnClickListener { onGroupToggle?.invoke(row.groupName) }
             ivMore.setOnClickListener {
                 val pm = PopupMenu(itemView.context, ivMore)
@@ -132,9 +134,11 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             tvCount.text = "${row.configCount}项"
             ivExpand.setImageResource(if (row.expanded) R.drawable.ic_arrow_down else R.drawable.ic_arrow_right)
             itemView.setPadding(dpToPx(itemView.context, 24), itemView.paddingTop, itemView.paddingRight, itemView.paddingBottom)
-            cbEnabled.setOnCheckedChangeListener(null)
-            cbEnabled.isChecked = row.allEnabled
-            cbEnabled.setOnCheckedChangeListener { _, checked -> onSubGroupToggleEnabled?.invoke(row.groupName, row.subGroupName, checked) }
+            updateTriState(cbEnabled, row.allEnabled, row.someEnabled)
+            cbEnabled.setOnClickListener {
+                val newState = !row.allEnabled
+                onSubGroupToggleEnabled?.invoke(row.groupName, row.subGroupName, newState)
+            }
             itemView.setOnClickListener { onSubGroupToggle?.invoke(row.groupName, row.subGroupName) }
             ivMore.setOnClickListener {
                 val pm = PopupMenu(itemView.context, ivMore)
@@ -238,6 +242,14 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
         fun dpToPx(context: android.content.Context, dp: Int): Int {
             return (dp * context.resources.displayMetrics.density).toInt()
+        }
+
+        fun updateTriState(iv: ImageView, allEnabled: Boolean, someEnabled: Boolean) {
+            when {
+                allEnabled -> iv.setImageResource(R.drawable.ic_checkbox_checked)
+                someEnabled -> iv.setImageResource(R.drawable.ic_checkbox_indeterminate)
+                else -> iv.setImageResource(R.drawable.ic_checkbox_empty)
+            }
         }
 
         fun displayNameForConfigCard(plugin: JReadVoiceEngine.VoicePlugin): String {

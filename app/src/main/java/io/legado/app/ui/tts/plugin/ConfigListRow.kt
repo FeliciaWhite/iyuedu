@@ -20,6 +20,6 @@ sealed class ConfigListRow {
         val someEnabled: Boolean,
     ) : ConfigListRow()
 
-    data class ConfigRow(val config: JReadVoiceEngine.VoiceConfig) : ConfigListRow()
+    data class ConfigRow(val config: JReadVoiceEngine.VoiceConfig, val indentLevel: Int = 0) : ConfigListRow()
     data class PluginRow(val plugin: JReadVoiceEngine.VoicePlugin) : ConfigListRow()
 }

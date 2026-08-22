@@ -41,6 +41,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
     private var currentTab = TAB_CONFIGS
     private var allConfigs: List<JReadVoiceEngine.VoiceConfig> = emptyList()
     private var allPlugins: List<JReadVoiceEngine.VoicePlugin> = emptyList()
+    private var allGroups: List<JReadVoiceEngine.VoiceGroup> = emptyList()
     private var pluginsMap: Map<String, JReadVoiceEngine.VoicePlugin> = emptyMap()
     private var expandedGroups = mutableSetOf<String>()
     private var expandedSubGroups = mutableSetOf<Pair<String, String>>()
@@ -114,6 +115,11 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
         loadData()
     }
 
+    override fun onResume() {
+        super.onResume()
+        loadData()
+    }
+
     private fun toggleGroup(groupName: String) {
         if (expandedGroups.contains(groupName)) expandedGroups.remove(groupName) else expandedGroups.add(groupName)
         rebuildRows()
@@ -131,6 +137,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
             allPlugins = withContext(Dispatchers.IO) { JReadVoiceEngine.listPlugins(this@TtsPluginActivity) }
             pluginsMap = allPlugins.associateBy { it.id }
             adapter.setPluginsMap(pluginsMap)
+            allGroups = withContext(Dispatchers.IO) { JReadVoiceEngine.listGroups(this@TtsPluginActivity) }
             when (currentTab) {
                 TAB_CONFIGS -> {
                     allConfigs = withContext(Dispatchers.IO) { JReadVoiceEngine.listConfigs(this@TtsPluginActivity) }
@@ -152,25 +159,38 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
             it.groupName.contains(searchQuery, true) || it.subGroupName.contains(searchQuery, true) ||
             it.voice.contains(searchQuery, true) || it.locale.contains(searchQuery, true)
         }
+        // 合并：从配置项中提取的分组 + 从 listGroups() 读取的分组（含空分组）
+        val configGroupNames = filtered.map { it.groupName.ifBlank { "默认分组" } }.toMutableSet()
+        val savedGroupNames = allGroups.map { it.groupName.ifBlank { "默认分组" } }.toSet()
+        configGroupNames.addAll(savedGroupNames)
+        val sortedGroupNames = configGroupNames.sorted()
         val rows = mutableListOf<ConfigListRow>()
-        val groups = filtered.groupBy { it.groupName.ifBlank { "默认分组" } }
-        for ((groupName, groupConfigs) in groups) {
+        for (groupName in sortedGroupNames) {
+            val groupConfigs = filtered.filter { it.groupName.ifBlank { "默认分组" } == groupName }
             val groupExpanded = expandedGroups.contains(groupName) || searchQuery.isNotEmpty()
-            val allOn = groupConfigs.all { it.enabled }
+            val allOn = groupConfigs.isNotEmpty() && groupConfigs.all { it.enabled }
             val someOn = groupConfigs.any { it.enabled }
             rows.add(ConfigListRow.GroupHeader(groupName, groupExpanded, groupConfigs.size, allOn, someOn))
             if (groupExpanded) {
-                val subGroups = groupConfigs.groupBy { it.subGroupName.ifBlank { "默认" } }
-                for ((subGroupName, subConfigs) in subGroups) {
+                // 合并子分组：配置项中的 + listGroups 中该分组下的
+                val configSubNames = groupConfigs.map { it.subGroupName.ifBlank { "默认" } }.toMutableSet()
+                val savedSubNames = allGroups.filter { it.groupName.ifBlank { "默认分组" } == groupName }
+                    .map { it.subGroupName.ifBlank { "默认" } }.toSet()
+                configSubNames.addAll(savedSubNames)
+                val sortedSubNames = configSubNames.sorted()
+                for (subGroupName in sortedSubNames) {
+                    val subConfigs = groupConfigs.filter { it.subGroupName.ifBlank { "默认" } == subGroupName }
                     val subExpanded = expandedSubGroups.contains(Pair(groupName, subGroupName)) || searchQuery.isNotEmpty()
-                    if (subGroups.size > 1) {
-                        val sAllOn = subConfigs.all { it.enabled }
+                    val hasMultipleSubs = sortedSubNames.size > 1
+                    if (hasMultipleSubs) {
+                        val sAllOn = subConfigs.isNotEmpty() && subConfigs.all { it.enabled }
                         val sSomeOn = subConfigs.any { it.enabled }
                         rows.add(ConfigListRow.SubGroupHeader(groupName, subGroupName, subExpanded, subConfigs.size, sAllOn, sSomeOn))
                     }
-                    if (subExpanded || subGroups.size <= 1) {
+                    if (subExpanded || !hasMultipleSubs) {
                         subConfigs.sortedWith(compareBy({ it.voiceTag }, { it.displayName })).forEach {
-                            rows.add(ConfigListRow.ConfigRow(it))
+                            // 有子分组头时缩进2级，没有时缩进1级
+                            rows.add(ConfigListRow.ConfigRow(it, if (hasMultipleSubs) 2 else 1))
                         }
                     }
                 }

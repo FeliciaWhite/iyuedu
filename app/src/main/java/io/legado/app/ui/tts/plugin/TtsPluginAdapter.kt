@@ -88,7 +88,7 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         when (val row = rows[position]) {
             is ConfigListRow.GroupHeader -> (holder as GroupHeaderViewHolder).bind(row)
             is ConfigListRow.SubGroupHeader -> (holder as GroupHeaderViewHolder).bindSub(row)
-            is ConfigListRow.ConfigRow -> (holder as ConfigViewHolder).bind(row.config)
+            is ConfigListRow.ConfigRow -> (holder as ConfigViewHolder).bind(row.config, row.indentLevel)
             is ConfigListRow.PluginRow -> (holder as PluginViewHolder).bind(row.plugin)
         }
     }
@@ -106,6 +106,7 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             tvGroupName.text = row.groupName.ifBlank { "默认分组" }
             tvCount.text = "${row.configCount}项"
             ivExpand.setImageResource(if (row.expanded) R.drawable.ic_arrow_down else R.drawable.ic_arrow_right)
+            itemView.setPadding(0, itemView.paddingTop, itemView.paddingRight, itemView.paddingBottom)
             cbEnabled.setOnCheckedChangeListener(null)
             cbEnabled.isChecked = row.allEnabled
             cbEnabled.setOnCheckedChangeListener { _, checked -> onGroupToggleEnabled?.invoke(row.groupName, checked) }
@@ -127,9 +128,10 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         }
 
         fun bindSub(row: ConfigListRow.SubGroupHeader) {
-            tvGroupName.text = "  ${row.subGroupName.ifBlank { "默认" }}"
+            tvGroupName.text = row.subGroupName.ifBlank { "默认" }
             tvCount.text = "${row.configCount}项"
             ivExpand.setImageResource(if (row.expanded) R.drawable.ic_arrow_down else R.drawable.ic_arrow_right)
+            itemView.setPadding(dpToPx(itemView.context, 24), itemView.paddingTop, itemView.paddingRight, itemView.paddingBottom)
             cbEnabled.setOnCheckedChangeListener(null)
             cbEnabled.isChecked = row.allEnabled
             cbEnabled.setOnCheckedChangeListener { _, checked -> onSubGroupToggleEnabled?.invoke(row.groupName, row.subGroupName, checked) }
@@ -160,12 +162,13 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         private val ivPreview: ImageView = itemView.findViewById(R.id.iv_preview)
         private val ivMore: ImageView = itemView.findViewById(R.id.iv_more)
 
-        fun bind(config: JReadVoiceEngine.VoiceConfig) {
+        fun bind(config: JReadVoiceEngine.VoiceConfig, indentLevel: Int = 0) {
             tvTag.text = config.voiceTag
             tvName.text = config.displayName.ifBlank { config.voice }
             val plugin = pluginsMap[config.pluginId]
             tvPluginName.text = if (plugin != null) displayNameForConfigCard(plugin) else ""
             tvParams.text = "采样率:24000hz | 音量:${"%.1f".format(config.volume)} | 语速:${"%.1f".format(config.speed)} | 音高:${"%.1f".format(config.pitch)}"
+            itemView.setPadding(dpToPx(itemView.context, indentLevel * 24), itemView.paddingTop, itemView.paddingRight, itemView.paddingBottom)
             cbEnabled.setOnCheckedChangeListener(null)
             cbEnabled.isChecked = config.enabled
             cbEnabled.setOnCheckedChangeListener { _, checked -> onConfigToggle?.invoke(config, checked) }
@@ -231,6 +234,10 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             if (id.matches(Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"))) return true
             if (id.matches(Regex("^\\d{6,}$"))) return true
             return false
+        }
+
+        fun dpToPx(context: android.content.Context, dp: Int): Int {
+            return (dp * context.resources.displayMetrics.density).toInt()
         }
 
         fun displayNameForConfigCard(plugin: JReadVoiceEngine.VoicePlugin): String {

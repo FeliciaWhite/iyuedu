@@ -3,26 +3,7 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <!-- 阳(白) -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M12,1 a11,11 0 0,0 0,22 a5.5,5.5 0 0,0 0,-11 a5.5,5.5 0 0,1 0,-11 z" />
-    <!-- 阴(黑) -->
-    <path
-        android:fillColor="#000000"
-        android:pathData="M12,1 a11,11 0 0,1 0,22 a5.5,5.5 0 0,1 0,-11 a5.5,5.5 0 0,0 0,-11 z" />
-    <!-- 白眼(在黑鱼中,下) -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M12,14 a3.5,3.5 0 1,0 0,7 a3.5,3.5 0 1,0 0,-7 z" />
-    <!-- 黑眼(在白鱼中,上) -->
-    <path
-        android:fillColor="#000000"
-        android:pathData="M12,3 a3.5,3.5 0 1,0 0,7 a3.5,3.5 0 1,0 0,-7 z" />
-    <!-- 外圈 -->
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="#000000"
-        android:strokeWidth="1"
-        android:pathData="M12,1 a11,11 0 1,0 0,22 a11,11 0 1,0 0,-22 z" />
+        android:fillColor="#C00000"
+        android:pathData="M5.5,6 h13 v2 h-4.6 v1.2 h3.9 v2 h-3.9 v1.3 h4.8 v2 h-13 v-2 h4.7 v-1.3 h-3.9 v-2 h3.9 v-1.2 h-4.6 z" />
 </vector>

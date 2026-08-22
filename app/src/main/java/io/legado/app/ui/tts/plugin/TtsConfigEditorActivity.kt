@@ -55,7 +55,6 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         setupSlider(binding.seekbarSpeed, binding.tvSpeedValue)
         setupSlider(binding.seekbarVolume, binding.tvVolumeValue)
         setupSlider(binding.seekbarPitch, binding.tvPitchValue)
-        binding.spinnerMethod.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("GET", "POST"))
         binding.spinnerPlugin.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: android.widget.AdapterView<*>?, v: View?, position: Int, id: Long) { onPluginSelected(position) }
             override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
@@ -99,18 +98,13 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         binding.etSubGroup.setText(config.subGroupName)
         binding.etLocale.setText(config.locale)
         binding.etVoice.setText(config.voice)
-        binding.etUrl.setText(config.urlTemplate)
-        binding.etHeaders.setText(config.headersText)
-        binding.etBody.setText(config.bodyTemplate)
-        binding.etResponsePath.setText(config.responseAudioPath)
         binding.seekbarSpeed.progress = (config.speed * 100).toInt().coerceIn(0, 300)
         binding.seekbarVolume.progress = (config.volume * 100).toInt().coerceIn(0, 300)
         binding.seekbarPitch.progress = (config.pitch * 100).toInt().coerceIn(0, 300)
         binding.tvSpeedValue.text = String.format("%.2f", config.speed)
         binding.tvVolumeValue.text = String.format("%.2f", config.volume)
         binding.tvPitchValue.text = String.format("%.2f", config.pitch)
-        binding.spinnerMethod.setSelection(listOf("GET", "POST").indexOf(config.method.ifBlank { "GET" }).coerceAtLeast(0))
-        val pluginNames = listOf("单项直连/不使用插件") + plugins.map { it.name.ifBlank { it.pluginId } }
+        val pluginNames = listOf("单项直连/不使用插件") + plugins.map { TtsPluginAdapter.displayNameForConfigCard(it) }
         binding.spinnerPlugin.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, pluginNames)
         val pluginIdx = plugins.indexOfFirst { it.id == config.pluginId || it.pluginId == config.pluginId }
         if (pluginIdx >= 0) binding.spinnerPlugin.setSelection(pluginIdx + 1)
@@ -320,10 +314,9 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         if (voiceTag.isBlank()) { toastOnUi("voiceTag 不能为空"); return null }
         val pluginIdx = binding.spinnerPlugin.selectedItemPosition
         val selectedPlugin = if (pluginIdx > 0) plugins.getOrNull(pluginIdx - 1) else null
-        val url = binding.etUrl.text.toString().trim()
-        if (selectedPlugin == null && url.isBlank()) { toastOnUi("未选择插件时 URL 不能为空"); return null }
+        if (selectedPlugin == null) { toastOnUi("请选择一个插件"); return null }
         val voice = binding.etVoice.text.toString().trim()
-        if (selectedPlugin != null && selectedPlugin.code.isNotBlank() && voice.isBlank()) { toastOnUi("请先选择一个音色 / voice"); return null }
+        if (selectedPlugin.code.isNotBlank() && voice.isBlank()) { toastOnUi("请先选择一个音色 / voice"); return null }
         val locale = if (localeOptions.isNotEmpty() && binding.spinnerLocale.selectedItemPosition < localeOptions.size && binding.spinnerLocale.visibility == View.VISIBLE) {
             localeOptions[binding.spinnerLocale.selectedItemPosition].id
         } else { binding.etLocale.text.toString().trim() }
@@ -334,17 +327,12 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
             displayName = binding.etDisplayName.text.toString().trim(),
             groupName = binding.etGroup.text.toString().trim(),
             subGroupName = binding.etSubGroup.text.toString().trim(),
-            pluginId = selectedPlugin?.id.orEmpty(),
+            pluginId = selectedPlugin.id,
             voice = voice,
             locale = locale,
             speed = binding.seekbarSpeed.progress / 100f,
             volume = binding.seekbarVolume.progress / 100f,
             pitch = binding.seekbarPitch.progress / 100f,
-            method = binding.spinnerMethod.selectedItem?.toString() ?: "GET",
-            urlTemplate = url,
-            headersText = binding.etHeaders.text.toString().trim(),
-            bodyTemplate = binding.etBody.text.toString().trim(),
-            responseAudioPath = binding.etResponsePath.text.toString().trim(),
             dataJson = buildDataJson(),
         )
     }

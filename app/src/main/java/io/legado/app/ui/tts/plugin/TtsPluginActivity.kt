@@ -41,6 +41,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
     private var currentTab = TAB_CONFIGS
     private var allConfigs: List<JReadVoiceEngine.VoiceConfig> = emptyList()
     private var allPlugins: List<JReadVoiceEngine.VoicePlugin> = emptyList()
+    private var pluginsMap: Map<String, JReadVoiceEngine.VoicePlugin> = emptyMap()
     private var expandedGroups = mutableSetOf<String>()
     private var expandedSubGroups = mutableSetOf<Pair<String, String>>()
     private var searchQuery = ""
@@ -74,15 +75,28 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
         })
         binding.ivClear.setOnClickListener { binding.etSearch.setText(""); searchQuery = ""; rebuildRows() }
 
+        binding.fabAdd.setOnClickListener {
+            when (currentTab) {
+                TAB_CONFIGS -> openConfigEditor(null, true)
+                TAB_PLUGINS -> showPluginEditor(null)
+            }
+        }
+
         adapter.setCallbacks(
             onConfigClick = { config -> openConfigEditor(config.id, false) },
             onConfigPreview = { config -> previewConfig(config) },
             onConfigDelete = { config -> deleteConfig(config) },
             onConfigToggle = { config, enabled -> toggleConfig(config, enabled) },
             onGroupToggle = { groupName -> toggleGroup(groupName) },
+            onGroupToggleEnabled = { groupName, enabled -> setGroupEnabled(groupName, null, enabled) },
             onSubGroupToggle = { groupName, subGroupName -> toggleSubGroup(groupName, subGroupName) },
-            onGroupMore = { groupName, subGroupName -> showGroupManageDialog(groupName, subGroupName) },
+            onSubGroupToggleEnabled = { groupName, subGroupName, enabled -> setGroupEnabled(groupName, subGroupName, enabled) },
+            onGroupRename = { groupName, subGroupName -> showRenameDialog(groupName, subGroupName) },
+            onGroupDelete = { groupName, subGroupName -> showDeleteGroupDialog(groupName, subGroupName) },
+            onGroupReplacePlugin = { groupName, subGroupName -> showReplacePluginDialog(groupName, subGroupName) },
+            onGroupOrganizeTags = { _, _ -> showOrganizeTagsDialog() },
             onPluginClick = { plugin -> showPluginEditor(plugin) },
+            onPluginEdit = { plugin -> showPluginEditor(plugin) },
             onPluginToggle = { plugin, enabled -> togglePlugin(plugin, enabled) },
             onPluginDelete = { plugin -> deletePlugin(plugin) },
             onPluginAudioParams = { plugin -> showPluginAudioParams(plugin) },
@@ -104,6 +118,9 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
     private fun loadData() {
         lifecycleScope.launch {
             withContext(Dispatchers.IO) { JReadVoiceEngine.ensureBuiltInVoicePresets(this@TtsPluginActivity) }
+            allPlugins = withContext(Dispatchers.IO) { JReadVoiceEngine.listPlugins(this@TtsPluginActivity) }
+            pluginsMap = allPlugins.associateBy { it.id }
+            adapter.setPluginsMap(pluginsMap)
             when (currentTab) {
                 TAB_CONFIGS -> {
                     allConfigs = withContext(Dispatchers.IO) { JReadVoiceEngine.listConfigs(this@TtsPluginActivity) }
@@ -111,7 +128,6 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                     rebuildRows()
                 }
                 TAB_PLUGINS -> {
-                    allPlugins = withContext(Dispatchers.IO) { JReadVoiceEngine.listPlugins(this@TtsPluginActivity) }
                     binding.searchBar.visibility = View.GONE
                     rebuildPluginRows()
                 }
@@ -130,13 +146,17 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
         val groups = filtered.groupBy { it.groupName.ifBlank { "默认分组" } }
         for ((groupName, groupConfigs) in groups) {
             val groupExpanded = expandedGroups.contains(groupName) || searchQuery.isNotEmpty()
-            rows.add(ConfigListRow.GroupHeader(groupName, groupExpanded, groupConfigs.size))
+            val allOn = groupConfigs.all { it.enabled }
+            val someOn = groupConfigs.any { it.enabled }
+            rows.add(ConfigListRow.GroupHeader(groupName, groupExpanded, groupConfigs.size, allOn, someOn))
             if (groupExpanded) {
                 val subGroups = groupConfigs.groupBy { it.subGroupName.ifBlank { "默认" } }
                 for ((subGroupName, subConfigs) in subGroups) {
                     val subExpanded = expandedSubGroups.contains(Pair(groupName, subGroupName)) || searchQuery.isNotEmpty()
                     if (subGroups.size > 1) {
-                        rows.add(ConfigListRow.SubGroupHeader(groupName, subGroupName, subExpanded, subConfigs.size))
+                        val sAllOn = subConfigs.all { it.enabled }
+                        val sSomeOn = subConfigs.any { it.enabled }
+                        rows.add(ConfigListRow.SubGroupHeader(groupName, subGroupName, subExpanded, subConfigs.size, sAllOn, sSomeOn))
                     }
                     if (subExpanded || subGroups.size <= 1) {
                         subConfigs.sortedWith(compareBy({ it.voiceTag }, { it.displayName })).forEach {
@@ -157,8 +177,13 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
     }
 
     private fun updateEmpty(empty: Boolean) {
-        binding.tvEmpty.visibility = if (empty) View.VISIBLE else View.GONE
+        binding.layoutEmpty.visibility = if (empty) View.VISIBLE else View.GONE
         binding.recyclerView.visibility = if (empty) View.GONE else View.VISIBLE
+        binding.tvEmptyHint.text = when (currentTab) {
+            TAB_CONFIGS -> "点击右下角按钮新增配置"
+            TAB_PLUGINS -> "点击右下角按钮或右上角导入插件"
+            else -> ""
+        }
     }
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
@@ -236,11 +261,91 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
         lifecycleScope.launch { withContext(Dispatchers.IO) { JReadVoiceEngine.saveConfig(this@TtsPluginActivity, config.copy(enabled = enabled)) } }
     }
 
-    private fun showGroupManageDialog(groupName: String, subGroupName: String?) {
-        alert("分组管理") {
-            setMessage("分组: $groupName${subGroupName?.let { " / $it" }.orEmpty()}\n\n功能开发中")
-            okButton()
+    private fun setGroupEnabled(groupName: String, subGroupName: String?, enabled: Boolean) {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                val configs = JReadVoiceEngine.listConfigs(this@TtsPluginActivity)
+                val ids = configs.filter { c ->
+                    c.groupName.ifBlank { "默认分组" } == groupName &&
+                    (subGroupName == null || c.subGroupName.ifBlank { "默认" } == subGroupName)
+                }.map { it.id }
+                JReadVoiceEngine.setConfigsEnabled(this@TtsPluginActivity, ids, enabled)
+            }
+            loadData()
         }
+    }
+
+    private fun showRenameDialog(groupName: String, subGroupName: String?) {
+        val etNewName = EditText(this).apply { setText(subGroupName ?: groupName); setPadding(48, 24, 48, 24) }
+        alert("重命名") {
+            customView { etNewName }
+            okButton {
+                val newName = etNewName.text.toString().trim()
+                if (newName.isBlank()) { toastOnUi("名称不能为空"); return@okButton }
+                lifecycleScope.launch {
+                    withContext(Dispatchers.IO) {
+                        val configs = JReadVoiceEngine.listConfigs(this@TtsPluginActivity)
+                        val toUpdate = configs.filter { c ->
+                            c.groupName.ifBlank { "默认分组" } == groupName &&
+                            (subGroupName == null || c.subGroupName.ifBlank { "默认" } == subGroupName)
+                        }
+                        val updated = if (subGroupName == null) toUpdate.map { it.copy(groupName = newName) }
+                        else toUpdate.map { it.copy(subGroupName = newName) }
+                        JReadVoiceEngine.saveConfigsBatch(this@TtsPluginActivity, updated)
+                    }
+                    toastOnUi("已重命名"); loadData()
+                }
+            }
+            cancelButton()
+        }
+    }
+
+    private fun showDeleteGroupDialog(groupName: String, subGroupName: String?) {
+        alert("删除确认") {
+            setMessage("确定要删除分组「${subGroupName ?: groupName}」及其下所有配置吗？")
+            yesButton {
+                lifecycleScope.launch {
+                    withContext(Dispatchers.IO) {
+                        val configs = JReadVoiceEngine.listConfigs(this@TtsPluginActivity)
+                        configs.filter { c ->
+                            c.groupName.ifBlank { "默认分组" } == groupName &&
+                            (subGroupName == null || c.subGroupName.ifBlank { "默认" } == subGroupName)
+                        }.forEach { JReadVoiceEngine.deleteConfig(this@TtsPluginActivity, it.id) }
+                    }
+                    toastOnUi("已删除分组"); loadData()
+                }
+            }
+            noButton()
+        }
+    }
+
+    private fun showReplacePluginDialog(groupName: String, subGroupName: String?) {
+        lifecycleScope.launch {
+            val plugins = allPlugins
+            if (plugins.isEmpty()) { toastOnUi("暂无可用插件"); return@launch }
+            val names = plugins.map { TtsPluginAdapter.displayNameForConfigCard(it) }
+            android.app.AlertDialog.Builder(this@TtsPluginActivity)
+                .setTitle("选择新插件").setItems(names.toTypedArray()) { _, which ->
+                    val newPlugin = plugins[which]
+                    lifecycleScope.launch {
+                        withContext(Dispatchers.IO) {
+                            val configs = JReadVoiceEngine.listConfigs(this@TtsPluginActivity)
+                            val toUpdate = configs.filter { c ->
+                                c.groupName.ifBlank { "默认分组" } == groupName &&
+                                (subGroupName == null || c.subGroupName.ifBlank { "默认" } == subGroupName)
+                            }.map { it.copy(pluginId = newPlugin.id) }
+                            JReadVoiceEngine.saveConfigsBatch(this@TtsPluginActivity, toUpdate)
+                        }
+                        toastOnUi("已更换插件为 ${newPlugin.name}"); loadData()
+                    }
+                }.show()
+        }
+    }
+
+    private fun showOrganizeTagsDialog() {
+        val modes = arrayOf("仅编号", "仅风格", "编号+风格", "完整重整理")
+        android.app.AlertDialog.Builder(this)
+            .setTitle("一键整理标签").setItems(modes) { _, which -> toastOnUi("整理模式: ${modes[which]}（功能开发中）") }.show()
     }
 
     private fun showPluginEditor(plugin: JReadVoiceEngine.VoicePlugin?) {
@@ -356,11 +461,8 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
             okButton {
                 val speed = sbSpeed.progress / 100f; val volume = sbVol.progress / 100f; val pitch = sbPitch.progress / 100f
                 lifecycleScope.launch {
-                    var count = 0
-                    withContext(Dispatchers.IO) {
-                        configs.forEach { c -> JReadVoiceEngine.saveConfig(this@TtsPluginActivity, c.copy(speed = speed, volume = volume, pitch = pitch)); count++ }
-                    }
-                    toastOnUi("已更新 $count 个音色项"); loadData()
+                    withContext(Dispatchers.IO) { JReadVoiceEngine.updatePluginAudioParams(this@TtsPluginActivity, plugin, speed, volume, pitch) }
+                    toastOnUi("已更新音频参数"); loadData()
                 }
             }
             cancelButton()
@@ -370,10 +472,10 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
     private fun doImport(uri: android.net.Uri) {
         lifecycleScope.launch {
             val count = withContext(Dispatchers.IO) {
-                val raw = contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) } ?: return@withContext 0
+                val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@withContext 0
                 when (currentTab) {
-                    TAB_CONFIGS -> JReadVoiceEngine.importConfigsFromJson(this@TtsPluginActivity, raw)
-                    TAB_PLUGINS -> JReadVoiceEngine.importPluginsFromJson(this@TtsPluginActivity, raw)
+                    TAB_CONFIGS -> JReadVoiceEngine.importConfigsFromJson(this@TtsPluginActivity, bytes.toString(Charsets.UTF_8))
+                    TAB_PLUGINS -> JReadVoiceEngine.importPluginsFromPackageBytes(this@TtsPluginActivity, bytes)
                     else -> 0
                 }
             }
@@ -386,7 +488,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
             val json = withContext(Dispatchers.IO) {
                 when (currentTab) {
                     TAB_CONFIGS -> JReadVoiceEngine.exportConfigsJson(this@TtsPluginActivity)
-                    TAB_PLUGINS -> JReadVoiceEngine.exportPluginsJson(this@TtsPluginActivity)
+                    TAB_PLUGINS -> JReadVoiceEngine.exportPluginsJson(this@TtsPluginActivity, includeUserVars = false)
                     else -> "[]"
                 }
             }

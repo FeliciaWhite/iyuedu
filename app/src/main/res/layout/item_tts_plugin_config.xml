@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
-    android:padding="12dp"
+    android:padding="10dp"
     android:gravity="center_vertical"
     android:background="?attr/selectableItemBackground">
 
@@ -14,65 +14,78 @@
         android:layout_weight="1"
         android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/tv_tag"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="15sp"
-            android:textStyle="bold"
-            android:textColor="@color/primaryText"
-            tools:text="旁白" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/tv_tag"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="@color/primaryText"
+                android:maxLines="1"
+                android:ellipsize="end"
+                tools:text="旁白" />
+
+            <TextView
+                android:id="@+id/tv_plugin_name"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:textColor="@color/secondaryText"
+                android:layout_marginStart="6dp"
+                tools:text="薇薇" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/tv_name"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:textSize="13sp"
+            android:layout_marginTop="1dp"
+            android:textSize="12sp"
             android:textColor="@color/secondaryText"
+            android:maxLines="1"
+            android:ellipsize="end"
             tools:text="默认旁白" />
 
         <TextView
-            android:id="@+id/tv_group"
+            android:id="@+id/tv_params"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:textSize="12sp"
+            android:layout_marginTop="1dp"
+            android:textSize="10sp"
             android:textColor="@color/secondaryText"
-            tools:text="系统配置 / 默认" />
-
-        <TextView
-            android:id="@+id/tv_voice"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:textSize="12sp"
-            android:textColor="@color/secondaryText"
-            tools:text="zh-CN-XiaoxiaoNeural" />
+            tools:text="采样率:24000hz | 音量:1.0 | 语速:1.0 | 音高:1.0" />
 
     </LinearLayout>
 
     <ImageView
         android:id="@+id/iv_preview"
-        android:layout_width="36dp"
-        android:layout_height="36dp"
-        android:padding="6dp"
+        android:layout_width="34dp"
+        android:layout_height="34dp"
+        android:padding="5dp"
         android:src="@drawable/ic_play_24dp"
         android:background="?attr/selectableItemBackgroundBorderless"
         android:contentDescription="试听" />
 
     <ImageView
-        android:id="@+id/iv_delete"
-        android:layout_width="36dp"
-        android:layout_height="36dp"
-        android:padding="6dp"
-        android:src="@drawable/ic_outline_delete"
+        android:id="@+id/iv_more"
+        android:layout_width="34dp"
+        android:layout_height="34dp"
+        android:padding="5dp"
+        android:src="@drawable/ic_more"
         android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="删除" />
+        android:contentDescription="更多" />
 
     <CheckBox
         android:id="@+id/cb_enabled"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content" />
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:padding="0dp" />
 
 </LinearLayout>

@@ -33,17 +33,16 @@
         app:iconSpaceReserved="false" />
 
     <io.legado.app.lib.prefs.Preference
-        android:icon="@drawable/ic_cfg_replace"
+        android:icon="@drawable/ic_taiji"
         android:key="ttsPluginManage"
         android:summary="管理 TTS 引擎插件配置，通过标签调用不同音色合成音频"
-        android:title="TTS 引擎插件"
-        app:iconSpaceReserved="false" />
+        android:title="TTS 引擎插件" />
 
     <io.legado.app.lib.prefs.Preference
+        android:icon="@drawable/ic_taiji_color"
         android:key="hunyuanTaiji"
         android:summary="本地 OpenAI 兼容中转服务，支持混元/豆包/Kimi/千问/智谱/DeepSeek"
-        android:title="混元太极"
-        app:iconSpaceReserved="false" />
+        android:title="混元太极" />
 
     <io.legado.app.lib.prefs.Preference
         android:icon="@drawable/ic_translate"

@@ -27,7 +27,7 @@ object JReadVoiceEngine {
     private const val KEY_PLUGINS = "voice_plugins"
     private const val KEY_GROUPS = "voice_groups"
     private const val KEY_BUILTIN_SYSTEM_CONFIG_SEEDED = "builtin_jread_voice_system_configs_seeded_v3"
-    private const val KEY_BUILTIN_VIVI_CONFIG_SEEDED = "builtin_vivi_voice_pool_v6_2398_grouped_seeded_v3"
+    private const val KEY_BUILTIN_VIVI_CONFIG_SEEDED = "builtin_vivi_voice_pool_v6_2398_grouped_seeded_v4"
     private const val KEY_BUILTIN_PLUGIN_BUNDLE_12_SEEDED = "builtin_jread_voice_plugins_12_seeded"
     private const val KEY_BUILTIN_AUDIOS_1064_PLUGIN_SEEDED = "builtin_audios_1064_plugin_seeded"
     private const val BUILTIN_SYSTEM_CONFIG_ASSET = "defaultData/jreadVoice/jread_voice_system_configs.json"

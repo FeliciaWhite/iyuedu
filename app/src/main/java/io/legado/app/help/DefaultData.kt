@@ -6,6 +6,7 @@ import io.legado.app.data.entities.DictRule
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.data.entities.KeyboardAssist
 import io.legado.app.data.entities.RssSource
+import io.legado.app.data.entities.TtsScript
 import io.legado.app.data.entities.TxtTocRule
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.config.ReadBookConfig
@@ -36,6 +37,7 @@ object DefaultData {
                 if (LocalConfig.needUpDictRule) {
                     importDefaultDictRules()
                 }
+                importDefaultTtsScripts()
             }.onError {
                 it.printOnDebug()
             }
@@ -110,6 +112,14 @@ object DefaultData {
         GSON.fromJsonArray<KeyboardAssist>(json).getOrThrow()
     }
 
+    val ttsScripts: List<TtsScript> by lazy {
+        val json = String(
+            appCtx.assets.open("defaultData${File.separator}ttsScripts.json")
+                .readBytes()
+        )
+        GSON.fromJsonArray<TtsScript>(json).getOrDefault(emptyList())
+    }
+
     fun importDefaultHttpTTS() {
         appDb.httpTTSDao.deleteDefault()
         appDb.httpTTSDao.insert(*httpTTS.toTypedArray())
@@ -127,6 +137,11 @@ object DefaultData {
 
     fun importDefaultDictRules() {
         appDb.dictRuleDao.insert(*dictRules.toTypedArray())
+    }
+
+    fun importDefaultTtsScripts() {
+        if (ttsScripts.isEmpty()) return
+        appDb.ttsScriptDao.insert(*ttsScripts.toTypedArray())
     }
 
 }

@@ -170,10 +170,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
         when (item.itemId) {
             R.id.menu_add -> when (currentTab) {
                 TAB_CONFIGS -> openConfigEditor(null, true)
-                TAB_PLUGINS -> alert("新增声音插件") {
-                    setMessage("新增插件请从右上角菜单「导入」J.TTS 插件 JSON 文件。\n\n插件编辑页只用于填写 API 密钥等变量。")
-                    okButton()
-                }
+                TAB_PLUGINS -> showPluginEditor(null)
             }
             R.id.menu_init_builtins -> lifecycleScope.launch {
                 withContext(Dispatchers.IO) { JReadVoiceEngine.ensureBuiltInVoicePresets(this@TtsPluginActivity) }
@@ -246,7 +243,57 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
         }
     }
 
-    private fun showPluginEditor(plugin: JReadVoiceEngine.VoicePlugin) {
+    private fun showPluginEditor(plugin: JReadVoiceEngine.VoicePlugin?) {
+        if (plugin == null) {
+            // 新增插件：提供完整的代码输入框
+            val etName = EditText(this).apply { hint = "插件名称"; setPadding(4, 8, 4, 8) }
+            val etPluginId = EditText(this).apply { hint = "插件 ID (可选，留空自动生成)"; setPadding(4, 8, 4, 8) }
+            val tvCodeLabel = TextView(this).apply { text = "插件 JS 代码"; textSize = 12f; setPadding(4, 12, 4, 4) }
+            val etCode = EditText(this).apply {
+                hint = "在此粘贴完整的插件 JS 代码..."
+                setPadding(8, 8, 8, 8)
+                minLines = 15
+                setHorizontallyScrolling(true)
+                setOnTouchListener { v, event ->
+                    if (event.action == android.view.MotionEvent.ACTION_UP) {
+                        v.parent.requestDisallowInterceptTouchEvent(true)
+                    }
+                    false
+                }
+            }
+            val tvHint = TextView(this).apply {
+                text = "也可从右上角菜单「导入」J.TTS 插件 JSON 文件。"
+                textSize = 11f; setPadding(4, 8, 4, 4)
+            }
+            val container = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL; setPadding(48, 24, 48, 0)
+                addView(etName); addView(etPluginId); addView(tvCodeLabel); addView(etCode); addView(tvHint)
+            }
+            val scrollView = android.widget.ScrollView(this).apply { addView(container) }
+            alert("新增声音插件") {
+                customView { scrollView }
+                okButton {
+                    val name = etName.text.toString().trim()
+                    val code = etCode.text.toString().trim()
+                    if (name.isBlank()) { toastOnUi("插件名称不能为空"); return@okButton }
+                    if (code.isBlank()) { toastOnUi("插件代码不能为空"); return@okButton }
+                    val newPlugin = JReadVoiceEngine.VoicePlugin(
+                        id = UUID.randomUUID().toString(),
+                        name = name,
+                        pluginId = etPluginId.text.toString().trim().ifBlank { name },
+                        code = code,
+                        enabled = true,
+                    )
+                    lifecycleScope.launch {
+                        withContext(Dispatchers.IO) { JReadVoiceEngine.savePlugin(this@TtsPluginActivity, newPlugin) }
+                        toastOnUi("已新增插件: $name"); loadData()
+                    }
+                }
+                cancelButton()
+            }
+            return
+        }
+        // 编辑插件：只填写 API 密钥
         val userVars = runCatching { JSONObject(plugin.userVarsJson.ifBlank { "{}" }) }.getOrNull() ?: JSONObject()
         val apiValue = listOf("api", "apiKey", "api_key", "key", "token", "accessToken", "secret")
             .firstNotNullOfOrNull { key -> userVars.optString(key).takeIf { it.isNotBlank() } }.orEmpty()

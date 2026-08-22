@@ -5,7 +5,6 @@ import android.media.MediaPlayer
 import android.os.Bundle
 import android.view.View
 import android.widget.ArrayAdapter
-import android.widget.EditText
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.lifecycle.lifecycleScope
@@ -28,6 +27,10 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
     private var config: JReadVoiceEngine.VoiceConfig = JReadVoiceEngine.VoiceConfig(voiceTag = "")
     private var plugins: List<JReadVoiceEngine.VoicePlugin> = emptyList()
     private var mediaPlayer: MediaPlayer? = null
+    private var localeOptions: List<JReadVoicePluginRuntime.LocaleOption> = emptyList()
+    private var voiceOptions: List<JReadVoicePluginRuntime.VoiceOption> = emptyList()
+    private var presetOptions: List<JReadVoicePluginRuntime.PluginPresetOption> = emptyList()
+    private var pluginDataFields = mutableMapOf<String, String>()
 
     companion object {
         const val EXTRA_CONFIG_ID = "configId"
@@ -42,30 +45,34 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
     }
 
     private fun initViews() {
-        val genderOptions = listOf("女性", "男性")
-        val ageOptions = listOf("儿童", "少年", "青年", "中年", "老年")
-        binding.spinnerGender.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, genderOptions)
-        binding.spinnerAge.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, ageOptions)
-
+        binding.spinnerGender.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("女性", "男性"))
+        binding.spinnerAge.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("儿童", "少年", "青年", "中年", "老年"))
         binding.btnGenerateTag.setOnClickListener { generateTimbreTag() }
         binding.btnRecognizeTag.setOnClickListener { recognizeTimbreTag() }
         binding.ivTagSearch.setOnClickListener { showTagSearchDialog() }
         binding.ivVoiceSearch.setOnClickListener { loadAndShowVoices() }
-        binding.btnLoadVoices.setOnClickListener { loadAndShowVoices() }
         binding.btnPreview.setOnClickListener { previewConfig() }
-
         setupSlider(binding.seekbarSpeed, binding.tvSpeedValue)
         setupSlider(binding.seekbarVolume, binding.tvVolumeValue)
         setupSlider(binding.seekbarPitch, binding.tvPitchValue)
-
         binding.spinnerMethod.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("GET", "POST"))
+        binding.spinnerPlugin.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, v: View?, position: Int, id: Long) { onPluginSelected(position) }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
+        }
+        binding.spinnerLocale.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, v: View?, position: Int, id: Long) { onLocaleSelected(position) }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
+        }
+        binding.spinnerPreset.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, v: View?, position: Int, id: Long) { onPresetSelected(position) }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
+        }
     }
 
     private fun setupSlider(seekbar: SeekBar, tvValue: TextView) {
         seekbar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
-                tvValue.text = String.format("%.2f", progress / 100f)
-            }
+            override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) { tvValue.text = String.format("%.2f", progress / 100f) }
             override fun onStartTrackingTouch(sb: SeekBar?) = Unit
             override fun onStopTrackingTouch(sb: SeekBar?) = Unit
         })
@@ -76,14 +83,10 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
             val configId = intent.getStringExtra(EXTRA_CONFIG_ID)
             val isNew = intent.getBooleanExtra(EXTRA_IS_NEW, false)
             if (!isNew && configId != null) {
-                val configs = withContext(Dispatchers.IO) {
-                    JReadVoiceEngine.listConfigs(this@TtsConfigEditorActivity)
-                }
+                val configs = withContext(Dispatchers.IO) { JReadVoiceEngine.listConfigs(this@TtsConfigEditorActivity) }
                 config = configs.firstOrNull { it.id == configId } ?: JReadVoiceEngine.VoiceConfig(voiceTag = "")
             }
-            plugins = withContext(Dispatchers.IO) {
-                JReadVoiceEngine.listPlugins(this@TtsConfigEditorActivity)
-            }
+            plugins = withContext(Dispatchers.IO) { JReadVoiceEngine.listPlugins(this@TtsConfigEditorActivity) }
             fillForm()
         }
     }
@@ -100,23 +103,145 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         binding.etHeaders.setText(config.headersText)
         binding.etBody.setText(config.bodyTemplate)
         binding.etResponsePath.setText(config.responseAudioPath)
-
         binding.seekbarSpeed.progress = (config.speed * 100).toInt().coerceIn(0, 300)
         binding.seekbarVolume.progress = (config.volume * 100).toInt().coerceIn(0, 300)
         binding.seekbarPitch.progress = (config.pitch * 100).toInt().coerceIn(0, 300)
         binding.tvSpeedValue.text = String.format("%.2f", config.speed)
         binding.tvVolumeValue.text = String.format("%.2f", config.volume)
         binding.tvPitchValue.text = String.format("%.2f", config.pitch)
-
-        val methods = listOf("GET", "POST")
-        binding.spinnerMethod.setSelection(methods.indexOf(config.method.ifBlank { "GET" }).coerceAtLeast(0))
-
+        binding.spinnerMethod.setSelection(listOf("GET", "POST").indexOf(config.method.ifBlank { "GET" }).coerceAtLeast(0))
         val pluginNames = listOf("单项直连/不使用插件") + plugins.map { it.name.ifBlank { it.pluginId } }
         binding.spinnerPlugin.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, pluginNames)
         val pluginIdx = plugins.indexOfFirst { it.id == config.pluginId || it.pluginId == config.pluginId }
         if (pluginIdx >= 0) binding.spinnerPlugin.setSelection(pluginIdx + 1)
-
+        pluginDataFields = runCatching {
+            val obj = JSONObject(config.dataJson.ifBlank { "{}" })
+            mutableMapOf<String, String>().apply { obj.keys().forEach { put(it, obj.optString(it)) } }
+        }.getOrDefault(mutableMapOf())
         recognizeTimbreTag()
+    }
+
+    private fun onPluginSelected(position: Int) {
+        val plugin = if (position > 0) plugins.getOrNull(position - 1) else null
+        if (plugin == null || plugin.code.isBlank()) {
+            binding.spinnerLocale.visibility = View.GONE
+            binding.etLocale.visibility = View.VISIBLE
+            binding.layoutPreset.visibility = View.GONE
+            localeOptions = emptyList(); voiceOptions = emptyList(); presetOptions = emptyList()
+            return
+        }
+        binding.spinnerLocale.visibility = View.VISIBLE
+        binding.etLocale.visibility = View.GONE
+        lifecycleScope.launch {
+            localeOptions = withContext(Dispatchers.IO) {
+                runCatching { JReadVoicePluginRuntime.listLocales(this@TtsConfigEditorActivity, plugin) }.getOrDefault(emptyList())
+            }
+            if (localeOptions.isEmpty()) {
+                binding.spinnerLocale.visibility = View.GONE
+                binding.etLocale.visibility = View.VISIBLE
+            } else {
+                val localeNames = localeOptions.map { it.name.ifBlank { it.id } }
+                binding.spinnerLocale.adapter = ArrayAdapter(this@TtsConfigEditorActivity, android.R.layout.simple_spinner_dropdown_item, localeNames)
+                val currentLocale = config.locale.ifBlank { "zh-CN" }
+                val localeIdx = localeOptions.indexOfFirst { it.id == currentLocale || it.name == currentLocale }
+                if (localeIdx >= 0) binding.spinnerLocale.setSelection(localeIdx)
+            }
+            if (plugin.code.contains("getRulePresets")) loadPresetOptions(plugin)
+            else binding.layoutPreset.visibility = View.GONE
+        }
+    }
+
+    private fun onLocaleSelected(position: Int) {
+        if (localeOptions.isEmpty() || position >= localeOptions.size) return
+        val locale = localeOptions[position].id
+        val pluginIdx = binding.spinnerPlugin.selectedItemPosition
+        if (pluginIdx <= 0) return
+        val plugin = plugins.getOrNull(pluginIdx - 1) ?: return
+        binding.etVoice.setText("")
+        voiceOptions = emptyList()
+        lifecycleScope.launch {
+            voiceOptions = withContext(Dispatchers.IO) {
+                runCatching { JReadVoicePluginRuntime.listVoices(this@TtsConfigEditorActivity, plugin, locale) }.getOrDefault(emptyList())
+            }
+            if (voiceOptions.isEmpty()) toastOnUi("该分类无可用音色")
+        }
+    }
+
+    private fun loadAndShowVoices() {
+        val pluginIdx = binding.spinnerPlugin.selectedItemPosition
+        if (pluginIdx <= 0) { toastOnUi("请先选择插件"); return }
+        val plugin = plugins.getOrNull(pluginIdx - 1) ?: return
+        val locale = if (localeOptions.isNotEmpty() && binding.spinnerLocale.selectedItemPosition < localeOptions.size) {
+            localeOptions[binding.spinnerLocale.selectedItemPosition].id
+        } else { binding.etLocale.text.toString().trim().ifBlank { "zh-CN" } }
+        toastOnUi("正在读取音色列表...")
+        lifecycleScope.launch {
+            voiceOptions = withContext(Dispatchers.IO) {
+                runCatching { JReadVoicePluginRuntime.listVoices(this@TtsConfigEditorActivity, plugin, locale) }.getOrDefault(emptyList())
+            }
+            if (voiceOptions.isEmpty()) { toastOnUi("无可用音色"); return@launch }
+            val items = voiceOptions.map { "${it.name.ifBlank { it.id }}  (${it.id})" }.toTypedArray()
+            android.app.AlertDialog.Builder(this@TtsConfigEditorActivity)
+                .setTitle("选择音色 (${voiceOptions.size})")
+                .setItems(items) { _, which ->
+                    val voice = voiceOptions[which]
+                    binding.etVoice.setText(voice.id)
+                    if (binding.etDisplayName.text.isBlank()) binding.etDisplayName.setText(voice.name.ifBlank { voice.id })
+                    notifyVoiceChanged(voice.id)
+                }
+                .show()
+        }
+    }
+
+    private fun notifyVoiceChanged(voiceId: String) {
+        val pluginIdx = binding.spinnerPlugin.selectedItemPosition
+        if (pluginIdx <= 0) return
+        val plugin = plugins.getOrNull(pluginIdx - 1) ?: return
+        val locale = if (localeOptions.isNotEmpty() && binding.spinnerLocale.selectedItemPosition < localeOptions.size) {
+            localeOptions[binding.spinnerLocale.selectedItemPosition].id
+        } else { binding.etLocale.text.toString().trim().ifBlank { "zh-CN" } }
+        lifecycleScope.launch {
+            val updatedData = withContext(Dispatchers.IO) {
+                runCatching { JReadVoicePluginRuntime.notifyVoiceChanged(this@TtsConfigEditorActivity, plugin, locale, voiceId, buildDataJson()) }
+                    .getOrDefault(emptyMap())
+            }
+            if (updatedData.isNotEmpty()) {
+                pluginDataFields.putAll(updatedData)
+                val pIdx = binding.spinnerPlugin.selectedItemPosition
+                if (pIdx > 0) { val p = plugins.getOrNull(pIdx - 1); if (p?.code?.contains("getRulePresets") == true) loadPresetOptions(p) }
+            }
+        }
+    }
+
+    private fun loadPresetOptions(plugin: JReadVoiceEngine.VoicePlugin) {
+        lifecycleScope.launch {
+            presetOptions = withContext(Dispatchers.IO) {
+                runCatching { JReadVoicePluginRuntime.listRulePresetOptions(this@TtsConfigEditorActivity, plugin, buildDataJson()) }.getOrDefault(emptyList())
+            }
+            if (presetOptions.isEmpty()) { binding.layoutPreset.visibility = View.GONE; return@launch }
+            binding.layoutPreset.visibility = View.VISIBLE
+            val presetNames = listOf("手写提示词") + presetOptions.map { it.name }
+            binding.spinnerPreset.adapter = ArrayAdapter(this@TtsConfigEditorActivity, android.R.layout.simple_spinner_dropdown_item, presetNames)
+            val currentIdx = pluginDataFields["clonePresetIndex"]?.toIntOrNull() ?: 0
+            if (currentIdx < presetNames.size) binding.spinnerPreset.setSelection(currentIdx)
+        }
+    }
+
+    private fun onPresetSelected(position: Int) {
+        if (position == 0) {
+            binding.tvManualContextLabel.visibility = View.VISIBLE
+            binding.etManualContext.visibility = View.VISIBLE
+            pluginDataFields["clonePresetIndex"] = "0"
+            pluginDataFields["clonePresetName"] = "手写提示词"
+            binding.etManualContext.setText(pluginDataFields["contextTexts"] ?: pluginDataFields["manualContextTexts"] ?: "")
+        } else {
+            binding.tvManualContextLabel.visibility = View.GONE
+            binding.etManualContext.visibility = View.GONE
+            val preset = presetOptions.getOrNull(position - 1) ?: return
+            pluginDataFields["clonePresetIndex"] = position.toString()
+            pluginDataFields["clonePresetName"] = preset.name
+            pluginDataFields["contextTexts"] = preset.contextText
+        }
     }
 
     private fun generateTimbreTag() {
@@ -135,10 +260,8 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         val tag = binding.etVoiceTag.text.toString().trim()
         val match = Regex("^(男性|女性)(儿童|少年|青年|中年|老年)/(.+?)(\\d{1,3})?$").matchEntire(tag)
         if (match != null) {
-            val genderOptions = listOf("女性", "男性")
-            val ageOptions = listOf("儿童", "少年", "青年", "中年", "老年")
-            binding.spinnerGender.setSelection(genderOptions.indexOf(match.groupValues[1]).coerceAtLeast(0))
-            binding.spinnerAge.setSelection(ageOptions.indexOf(match.groupValues[2]).coerceAtLeast(0))
+            binding.spinnerGender.setSelection(listOf("女性", "男性").indexOf(match.groupValues[1]).coerceAtLeast(0))
+            binding.spinnerAge.setSelection(listOf("儿童", "少年", "青年", "中年", "老年").indexOf(match.groupValues[2]).coerceAtLeast(0))
             binding.etStyle.setText(match.groupValues[3].trim())
             binding.etTagNumber.setText(match.groupValues[4].ifBlank { "01" })
         }
@@ -146,65 +269,26 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
 
     private fun showTagSearchDialog() {
         lifecycleScope.launch {
-            val tags = withContext(Dispatchers.IO) {
-                JReadVoiceEngine.listConfigs(this@TtsConfigEditorActivity)
-                    .map { it.voiceTag }.distinct().sorted()
-            }
+            val tags = withContext(Dispatchers.IO) { JReadVoiceEngine.listConfigs(this@TtsConfigEditorActivity).map { it.voiceTag }.distinct().sorted() }
             if (tags.isEmpty()) { toastOnUi("暂无可用标签"); return@launch }
             android.app.AlertDialog.Builder(this@TtsConfigEditorActivity)
                 .setTitle("选择标签 (${tags.size})")
-                .setItems(tags.toTypedArray()) { _, which ->
-                    binding.etVoiceTag.setText(tags[which])
-                    recognizeTimbreTag()
-                }
-                .show()
-        }
-    }
-
-    private fun loadAndShowVoices() {
-        val pluginIdx = binding.spinnerPlugin.selectedItemPosition
-        if (pluginIdx <= 0) { toastOnUi("请先选择插件"); return }
-        val plugin = plugins.getOrNull(pluginIdx - 1) ?: return
-        val locale = binding.etLocale.text.toString().trim().ifBlank { "zh-CN" }
-        toastOnUi("正在读取插件音色列表...")
-        lifecycleScope.launch {
-            val voices = withContext(Dispatchers.IO) {
-                runCatching { JReadVoicePluginRuntime.listVoices(this@TtsConfigEditorActivity, plugin, locale) }
-                    .getOrDefault(emptyList())
-            }
-            if (voices.isEmpty()) { toastOnUi("该插件无可用音色"); return@launch }
-            val items = voices.map { "${it.name.ifBlank { it.id }}  (${it.id})" }.toTypedArray()
-            android.app.AlertDialog.Builder(this@TtsConfigEditorActivity)
-                .setTitle("选择音色 (${voices.size})")
-                .setItems(items) { _, which ->
-                    val voice = voices[which]
-                    binding.etVoice.setText(voice.id)
-                    if (binding.etDisplayName.text.isBlank())
-                        binding.etDisplayName.setText(voice.name.ifBlank { voice.id })
-                }
+                .setItems(tags.toTypedArray()) { _, which -> binding.etVoiceTag.setText(tags[which]); recognizeTimbreTag() }
                 .show()
         }
     }
 
     private fun previewConfig() {
-        val previewText = binding.etPreviewText.text.toString().trim().ifBlank {
-            toastOnUi("请输入试听文本"); return
-        }
+        val previewText = binding.etPreviewText.text.toString().trim().ifBlank { toastOnUi("请输入试听文本"); return }
         val tempConfig = buildConfig() ?: return
         toastOnUi("正在试听: ${tempConfig.voiceTag}")
         lifecycleScope.launch {
             val requestId = UUID.randomUUID().toString()
             val pointerJson = JSONObject().put("voiceTag", tempConfig.voiceTag).toString()
             val audioBytes = withContext(Dispatchers.IO) {
-                runCatching {
-                    JReadVoiceEngine.synthesizeConfigLineAudio(
-                        this@TtsConfigEditorActivity, tempConfig, previewText, pointerJson, requestId
-                    )
-                }.getOrNull()
+                runCatching { JReadVoiceEngine.synthesizeConfigLineAudio(this@TtsConfigEditorActivity, tempConfig, previewText, pointerJson, requestId) }.getOrNull()
             }
-            if (audioBytes == null || audioBytes.isEmpty()) {
-                toastOnUi("试听失败，请检查配置"); return@launch
-            }
+            if (audioBytes == null || audioBytes.isEmpty()) { toastOnUi("试听失败"); return@launch }
             val tempFile = java.io.File(cacheDir, "preview_${requestId}.wav")
             tempFile.writeBytes(audioBytes)
             playAudio(tempFile.absolutePath)
@@ -214,17 +298,21 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
     private fun playAudio(path: String) {
         mediaPlayer?.release()
         mediaPlayer = MediaPlayer().apply {
-            setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                    .build()
-            )
-            setDataSource(path)
-            prepare()
+            setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+            setDataSource(path); prepare()
             setOnCompletionListener { it.release(); mediaPlayer = null }
             start()
         }
+    }
+
+    private fun buildDataJson(): String {
+        if (binding.etManualContext.visibility == View.VISIBLE) {
+            pluginDataFields["contextTexts"] = binding.etManualContext.text.toString()
+            pluginDataFields["manualContextTexts"] = binding.etManualContext.text.toString()
+        }
+        val obj = JSONObject()
+        pluginDataFields.forEach { (k, v) -> obj.put(k, v) }
+        return obj.toString()
     }
 
     private fun buildConfig(): JReadVoiceEngine.VoiceConfig? {
@@ -233,13 +321,12 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         val pluginIdx = binding.spinnerPlugin.selectedItemPosition
         val selectedPlugin = if (pluginIdx > 0) plugins.getOrNull(pluginIdx - 1) else null
         val url = binding.etUrl.text.toString().trim()
-        if (selectedPlugin == null && url.isBlank()) {
-            toastOnUi("未选择插件时 URL 不能为空"); return null
-        }
+        if (selectedPlugin == null && url.isBlank()) { toastOnUi("未选择插件时 URL 不能为空"); return null }
         val voice = binding.etVoice.text.toString().trim()
-        if (selectedPlugin != null && selectedPlugin.code.isNotBlank() && voice.isBlank()) {
-            toastOnUi("请先读取插件音色列表，并选择一个音色 / voice"); return null
-        }
+        if (selectedPlugin != null && selectedPlugin.code.isNotBlank() && voice.isBlank()) { toastOnUi("请先选择一个音色 / voice"); return null }
+        val locale = if (localeOptions.isNotEmpty() && binding.spinnerLocale.selectedItemPosition < localeOptions.size && binding.spinnerLocale.visibility == View.VISIBLE) {
+            localeOptions[binding.spinnerLocale.selectedItemPosition].id
+        } else { binding.etLocale.text.toString().trim() }
         return config.copy(
             id = config.id.ifBlank { UUID.randomUUID().toString() },
             enabled = binding.swEnabled.isChecked,
@@ -249,7 +336,7 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
             subGroupName = binding.etSubGroup.text.toString().trim(),
             pluginId = selectedPlugin?.id.orEmpty(),
             voice = voice,
-            locale = binding.etLocale.text.toString().trim(),
+            locale = locale,
             speed = binding.seekbarSpeed.progress / 100f,
             volume = binding.seekbarVolume.progress / 100f,
             pitch = binding.seekbarPitch.progress / 100f,
@@ -258,6 +345,7 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
             headersText = binding.etHeaders.text.toString().trim(),
             bodyTemplate = binding.etBody.text.toString().trim(),
             responseAudioPath = binding.etResponsePath.text.toString().trim(),
+            dataJson = buildDataJson(),
         )
     }
 
@@ -272,9 +360,7 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
                 val saved = buildConfig()
                 if (saved != null) {
                     lifecycleScope.launch {
-                        withContext(Dispatchers.IO) {
-                            JReadVoiceEngine.saveConfig(this@TtsConfigEditorActivity, saved)
-                        }
+                        withContext(Dispatchers.IO) { JReadVoiceEngine.saveConfig(this@TtsConfigEditorActivity, saved) }
                         toastOnUi("已保存: ${saved.voiceTag}")
                         finish()
                     }
@@ -287,7 +373,6 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
 
     override fun onDestroy() {
         super.onDestroy()
-        mediaPlayer?.release()
-        mediaPlayer = null
+        mediaPlayer?.release(); mediaPlayer = null
     }
 }

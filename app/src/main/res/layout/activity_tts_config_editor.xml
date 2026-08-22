@@ -129,18 +129,11 @@
                     <EditText android:id="@+id/et_locale" android:layout_width="match_parent"
                         android:layout_height="wrap_content" android:hint="如: zh-CN"
                         android:textSize="14sp" android:visibility="gone" android:layout_marginBottom="8dp" />
-                    <!-- voice + 搜索 -->
+                    <!-- voice: 下拉选择框 -->
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:text="音色 (voice)" android:textSize="12sp" android:textColor="@color/secondaryText" />
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="8dp">
-                        <EditText android:id="@+id/et_voice" android:layout_width="0dp"
-                            android:layout_height="wrap_content" android:layout_weight="1"
-                            android:hint="选择或输入音色" android:textSize="14sp" />
-                        <ImageView android:id="@+id/iv_voice_search" android:layout_width="36dp"
-                            android:layout_height="36dp" android:padding="6dp"
-                            android:src="@drawable/ic_search" android:background="?attr/selectableItemBackgroundBorderless" />
-                    </LinearLayout>
+                    <Spinner android:id="@+id/spinner_voice" android:layout_width="match_parent"
+                        android:layout_height="wrap_content" android:layout_marginBottom="8dp" />
                     <!-- 预设控制（动态显示） -->
                     <LinearLayout android:id="@+id/layout_preset" android:layout_width="match_parent"
                         android:layout_height="wrap_content" android:orientation="vertical"
@@ -218,44 +211,6 @@
                     <TextView android:id="@+id/tv_pitch_value" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:text="1.00" android:textSize="11sp"
                         android:textColor="@color/secondaryText" android:layout_marginBottom="8dp" />
-                </LinearLayout>
-            </androidx.cardview.widget.CardView>
-
-            <!-- 卡片5: 直连设置 -->
-            <androidx.cardview.widget.CardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                app:cardCornerRadius="8dp"
-                app:cardElevation="2dp">
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="vertical" android:padding="16dp">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="直连设置 (无插件时使用)" android:textSize="16sp" android:textStyle="bold"
-                        android:textColor="@color/primaryText" android:layout_marginBottom="12dp" />
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="URL 模板" android:textSize="12sp" android:textColor="@color/secondaryText" />
-                    <EditText android:id="@+id/et_url" android:layout_width="match_parent"
-                        android:layout_height="wrap_content" android:hint="https://..."
-                        android:textSize="13sp" android:layout_marginBottom="8dp" />
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="请求方法" android:textSize="12sp" android:textColor="@color/secondaryText" />
-                    <Spinner android:id="@+id/spinner_method" android:layout_width="match_parent"
-                        android:layout_height="wrap_content" android:layout_marginBottom="8dp" />
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="请求头 (JSON)" android:textSize="12sp" android:textColor="@color/secondaryText" />
-                    <EditText android:id="@+id/et_headers" android:layout_width="match_parent"
-                        android:layout_height="wrap_content" android:textSize="13sp"
-                        android:minLines="2" android:layout_marginBottom="8dp" />
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="请求体模板" android:textSize="12sp" android:textColor="@color/secondaryText" />
-                    <EditText android:id="@+id/et_body" android:layout_width="match_parent"
-                        android:layout_height="wrap_content" android:textSize="13sp"
-                        android:minLines="2" android:layout_marginBottom="8dp" />
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="响应音频路径" android:textSize="12sp" android:textColor="@color/secondaryText" />
-                    <EditText android:id="@+id/et_response_path" android:layout_width="match_parent"
-                        android:layout_height="wrap_content" android:hint="如: data.audio" android:textSize="13sp" />
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
 

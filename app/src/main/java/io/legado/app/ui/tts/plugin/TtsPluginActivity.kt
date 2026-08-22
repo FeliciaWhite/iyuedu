@@ -398,27 +398,40 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
             }
             return
         }
-        // 编辑插件：只填写 API 密钥
+        // 编辑插件：API 密钥 + JS 代码编辑
         val userVars = runCatching { JSONObject(plugin.userVarsJson.ifBlank { "{}" }) }.getOrNull() ?: JSONObject()
         val apiValue = listOf("api", "apiKey", "api_key", "key", "token", "accessToken", "secret")
             .firstNotNullOfOrNull { key -> userVars.optString(key).takeIf { it.isNotBlank() } }.orEmpty()
-        val etApi = EditText(this).apply { setText(apiValue); textSize = 13f }
+        val etApi = EditText(this).apply { setText(apiValue); textSize = 13f; hint = "API 密钥" }
+        val tvCodeLabel = TextView(this).apply { text = "插件 JS 代码"; textSize = 12f; setPadding(4, 12, 4, 4) }
+        val etCode = EditText(this).apply {
+            setText(plugin.code); textSize = 11f; setPadding(8, 8, 8, 8)
+            minLines = 10; setHorizontallyScrolling(true)
+            setOnTouchListener { v, event ->
+                if (event.action == android.view.MotionEvent.ACTION_UP) v.parent.requestDisallowInterceptTouchEvent(true)
+                false
+            }
+        }
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setPadding(48, 24, 48, 0)
             addView(TextView(this@TtsPluginActivity).apply { text = plugin.name; textSize = 18f; setPadding(4, 6, 4, 2) })
-            addView(TextView(this@TtsPluginActivity).apply { text = "只需要填写 API。保存后会自动写入 api/apiKey/key/token 等兼容字段。"; textSize = 12f; setPadding(4, 0, 4, 8) })
-            addView(TextView(this@TtsPluginActivity).apply { text = "API"; textSize = 12f; setPadding(4, 8, 4, 2) })
+            addView(TextView(this@TtsPluginActivity).apply { text = "API 密钥"; textSize = 12f; setPadding(4, 8, 4, 2) })
             addView(etApi)
+            addView(tvCodeLabel)
+            addView(etCode)
         }
-        alert("插件 API") {
-            customView { container }
+        val scrollView = android.widget.ScrollView(this).apply { addView(container) }
+        alert("编辑插件") {
+            customView { scrollView }
             okButton {
                 val api = etApi.text.toString().trim()
+                val code = etCode.text.toString().trim()
                 val merged = JSONObject(plugin.userVarsJson.ifBlank { "{}" })
                 listOf("api", "apiKey", "api_key", "key", "token", "accessToken", "secret").forEach { merged.put(it, api) }
+                val updated = plugin.copy(userVarsJson = merged.toString(), code = code)
                 lifecycleScope.launch {
-                    withContext(Dispatchers.IO) { JReadVoiceEngine.savePlugin(this@TtsPluginActivity, plugin.copy(userVarsJson = merged.toString())) }
-                    toastOnUi("已保存插件 API: ${plugin.name}"); loadData()
+                    withContext(Dispatchers.IO) { JReadVoiceEngine.savePlugin(this@TtsPluginActivity, updated) }
+                    toastOnUi("已保存插件: ${plugin.name}"); loadData()
                 }
             }
             cancelButton()

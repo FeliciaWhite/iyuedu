@@ -43,8 +43,8 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
     private var allPlugins: List<JReadVoiceEngine.VoicePlugin> = emptyList()
     private var allGroups: List<JReadVoiceEngine.VoiceGroup> = emptyList()
     private var pluginsMap: Map<String, JReadVoiceEngine.VoicePlugin> = emptyMap()
-    private var expandedGroups = mutableSetOf<String>()
-    private var expandedSubGroups = mutableSetOf<Pair<String, String>>()
+    private var collapsedGroups = mutableSetOf<String>()
+    private var collapsedSubGroups = mutableSetOf<Pair<String, String>>()
     private var searchQuery = ""
     private var mediaPlayer: MediaPlayer? = null
 
@@ -121,13 +121,13 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
     }
 
     private fun toggleGroup(groupName: String) {
-        if (expandedGroups.contains(groupName)) expandedGroups.remove(groupName) else expandedGroups.add(groupName)
+        if (collapsedGroups.contains(groupName)) collapsedGroups.remove(groupName) else collapsedGroups.add(groupName)
         rebuildRows()
     }
 
     private fun toggleSubGroup(groupName: String, subGroupName: String) {
         val key = Pair(groupName, subGroupName)
-        if (expandedSubGroups.contains(key)) expandedSubGroups.remove(key) else expandedSubGroups.add(key)
+        if (collapsedSubGroups.contains(key)) collapsedSubGroups.remove(key) else collapsedSubGroups.add(key)
         rebuildRows()
     }
 
@@ -192,7 +192,8 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
         val rows = mutableListOf<ConfigListRow>()
         for (groupName in sortedGroupNames) {
             val groupConfigs = filtered.filter { it.groupName.ifBlank { "默认分组" } == groupName }
-            val groupExpanded = expandedGroups.contains(groupName) || searchQuery.isNotEmpty()
+            // 默认展开所有分组（用户可手动折叠）
+            val groupExpanded = !collapsedGroups.contains(groupName) || searchQuery.isNotEmpty()
             val allOn = groupConfigs.isNotEmpty() && groupConfigs.all { it.enabled }
             val someOn = groupConfigs.any { it.enabled }
             rows.add(ConfigListRow.GroupHeader(groupName, groupExpanded, groupConfigs.size, allOn, someOn))
@@ -205,7 +206,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                 val sortedSubNames = configSubNames.sorted()
                 for (subGroupName in sortedSubNames) {
                     val subConfigs = groupConfigs.filter { it.subGroupName.ifBlank { "默认" } == subGroupName }
-                    val subExpanded = expandedSubGroups.contains(Pair(groupName, subGroupName)) || searchQuery.isNotEmpty()
+                    val subExpanded = !collapsedSubGroups.contains(Pair(groupName, subGroupName)) || searchQuery.isNotEmpty()
                     val hasMultipleSubs = sortedSubNames.size > 1
                     if (hasMultipleSubs) {
                         val sAllOn = subConfigs.isNotEmpty() && subConfigs.all { it.enabled }

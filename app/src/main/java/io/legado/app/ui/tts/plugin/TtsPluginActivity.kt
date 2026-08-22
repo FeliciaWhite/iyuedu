@@ -77,7 +77,17 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
 
         binding.fabAdd.setOnClickListener {
             when (currentTab) {
-                TAB_CONFIGS -> openConfigEditor(null, true)
+                TAB_CONFIGS -> {
+                    val options = arrayOf("新增配置", "新增分组")
+                    android.app.AlertDialog.Builder(this)
+                        .setTitle("请选择")
+                        .setItems(options) { _, which ->
+                            when (which) {
+                                0 -> openConfigEditor(null, true)
+                                1 -> showAddGroupDialog()
+                            }
+                        }.show()
+                }
                 TAB_PLUGINS -> showPluginEditor(null)
             }
         }
@@ -346,6 +356,30 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
         val modes = arrayOf("仅编号", "仅风格", "编号+风格", "完整重整理")
         android.app.AlertDialog.Builder(this)
             .setTitle("一键整理标签").setItems(modes) { _, which -> toastOnUi("整理模式: ${modes[which]}（功能开发中）") }.show()
+    }
+
+    private fun showAddGroupDialog() {
+        val etGroup = EditText(this).apply { hint = "一级分组名称"; setPadding(48, 24, 48, 24) }
+        val etSubGroup = EditText(this).apply { hint = "二级分组名称 (可选)"; setPadding(48, 24, 48, 24) }
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(0, 0, 0, 0)
+            addView(etGroup); addView(etSubGroup)
+        }
+        alert("新增分组") {
+            customView { container }
+            okButton {
+                val groupName = etGroup.text.toString().trim()
+                if (groupName.isBlank()) { toastOnUi("分组名称不能为空"); return@okButton }
+                val subGroupName = etSubGroup.text.toString().trim()
+                lifecycleScope.launch {
+                    withContext(Dispatchers.IO) {
+                        JReadVoiceEngine.saveGroup(this@TtsPluginActivity, JReadVoiceEngine.VoiceGroup(groupName = groupName, subGroupName = subGroupName))
+                    }
+                    toastOnUi("已新增分组: $groupName"); loadData()
+                }
+            }
+            cancelButton()
+        }
     }
 
     private fun showPluginEditor(plugin: JReadVoiceEngine.VoicePlugin?) {

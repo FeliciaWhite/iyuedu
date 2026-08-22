@@ -1785,11 +1785,21 @@ object JReadVoiceEngine {
     private fun normalizeVoiceConfigForStorage(config: VoiceConfig): VoiceConfig {
         val normalizedVoiceTag = normalizedVoiceTagForConfig(config)
         val groupTarget = timbreConfigGroupForVoiceTag(normalizedVoiceTag)
+        // 如果用户手动修改了分组名（与自动计算的不同），则保留用户输入
+        val userOverrideGroup = config.groupName.trim().isNotBlank() &&
+            config.groupName.trim() != groupTarget?.groupName
+        val userOverrideSubGroup = config.subGroupName.trim().isNotBlank() &&
+            config.subGroupName.trim() != groupTarget?.subGroupName
+        val userOverrideThirdGroup = config.thirdGroupName.trim().isNotBlank() &&
+            config.thirdGroupName.trim() != groupTarget?.thirdGroupName
         return config.copy(
             voiceTag = normalizedVoiceTag,
-            groupName = groupTarget?.groupName ?: config.groupName.trim(),
-            subGroupName = groupTarget?.subGroupName ?: config.subGroupName.trim(),
-            thirdGroupName = groupTarget?.thirdGroupName ?: config.thirdGroupName.trim(),
+            groupName = if (userOverrideGroup) config.groupName.trim()
+                else groupTarget?.groupName ?: config.groupName.trim(),
+            subGroupName = if (userOverrideSubGroup) config.subGroupName.trim()
+                else groupTarget?.subGroupName ?: config.subGroupName.trim(),
+            thirdGroupName = if (userOverrideThirdGroup) config.thirdGroupName.trim()
+                else groupTarget?.thirdGroupName ?: config.thirdGroupName.trim(),
         )
     }
 

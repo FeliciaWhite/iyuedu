@@ -51,6 +51,8 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         binding.btnRecognizeTag.setOnClickListener { recognizeTimbreTag() }
         binding.ivTagSearch.setOnClickListener { showTagSearchDialog() }
         binding.btnPreview.setOnClickListener { previewConfig() }
+        binding.ivGroupPicker.setOnClickListener { showGroupPicker() }
+        binding.ivSubGroupPicker.setOnClickListener { showSubGroupPicker() }
         setupSlider(binding.seekbarSpeed, binding.tvSpeedValue)
         setupSlider(binding.seekbarVolume, binding.tvVolumeValue)
         setupSlider(binding.seekbarPitch, binding.tvPitchValue)
@@ -230,6 +232,36 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
             pluginDataFields["clonePresetIndex"] = position.toString()
             pluginDataFields["clonePresetName"] = preset.name
             pluginDataFields["contextTexts"] = preset.contextText
+        }
+    }
+
+    private fun showGroupPicker() {
+        lifecycleScope.launch {
+            val groups = withContext(Dispatchers.IO) {
+                val configs = JReadVoiceEngine.listConfigs(this@TtsConfigEditorActivity)
+                configs.map { it.groupName.ifBlank { "默认分组" } }.distinct().sorted()
+            }
+            if (groups.isEmpty()) { toastOnUi("暂无分组"); return@launch }
+            android.app.AlertDialog.Builder(this@TtsConfigEditorActivity)
+                .setTitle("选择一级分组 (${groups.size})")
+                .setItems(groups.toTypedArray()) { _, which -> binding.etGroup.setText(groups[which]) }
+                .show()
+        }
+    }
+
+    private fun showSubGroupPicker() {
+        val currentGroup = binding.etGroup.text.toString().trim()
+        lifecycleScope.launch {
+            val subGroups = withContext(Dispatchers.IO) {
+                val configs = JReadVoiceEngine.listConfigs(this@TtsConfigEditorActivity)
+                configs.filter { it.groupName.ifBlank { "默认分组" } == currentGroup.ifBlank { "默认分组" } }
+                    .map { it.subGroupName.ifBlank { "默认" } }.distinct().sorted()
+            }
+            if (subGroups.isEmpty()) { toastOnUi("该分组下暂无子分组"); return@launch }
+            android.app.AlertDialog.Builder(this@TtsConfigEditorActivity)
+                .setTitle("选择二级分组 (${subGroups.size})")
+                .setItems(subGroups.toTypedArray()) { _, which -> binding.etSubGroup.setText(subGroups[which]) }
+                .show()
         }
     }
 

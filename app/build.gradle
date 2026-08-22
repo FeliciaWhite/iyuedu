@@ -81,7 +81,7 @@ android {
             if (project.hasProperty("RELEASE_STORE_FILE")) {
                 signingConfig signingConfigs.myConfig
             }
-            applicationIdSuffix '.release.i'
+            applicationIdSuffix '.release.z'
             if (getApplicationIdSuffix() == '.releaseA') {
                 manifestPlaceholders.put("app_name", "@string/app_name_a")
             } else {

@@ -91,13 +91,26 @@
                     </LinearLayout>
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:text="一级分组" android:textSize="12sp" android:textColor="@color/secondaryText" />
-                    <EditText android:id="@+id/et_group" android:layout_width="match_parent"
-                        android:layout_height="wrap_content" android:hint="如: 默认分组"
-                        android:textSize="14sp" android:layout_marginBottom="8dp" />
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="8dp">
+                        <EditText android:id="@+id/et_group" android:layout_width="0dp"
+                            android:layout_height="wrap_content" android:layout_weight="1"
+                            android:hint="如: 默认分组" android:textSize="14sp" />
+                        <ImageView android:id="@+id/iv_group_picker" android:layout_width="36dp"
+                            android:layout_height="36dp" android:padding="6dp"
+                            android:src="@drawable/ic_arrow_down" android:background="?attr/selectableItemBackgroundBorderless" />
+                    </LinearLayout>
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:text="二级分组" android:textSize="12sp" android:textColor="@color/secondaryText" />
-                    <EditText android:id="@+id/et_sub_group" android:layout_width="match_parent"
-                        android:layout_height="wrap_content" android:hint="如: 默认" android:textSize="14sp" />
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="8dp">
+                        <EditText android:id="@+id/et_sub_group" android:layout_width="0dp"
+                            android:layout_height="wrap_content" android:layout_weight="1"
+                            android:hint="如: 默认" android:textSize="14sp" />
+                        <ImageView android:id="@+id/iv_sub_group_picker" android:layout_width="36dp"
+                            android:layout_height="36dp" android:padding="6dp"
+                            android:src="@drawable/ic_arrow_down" android:background="?attr/selectableItemBackgroundBorderless" />
+                    </LinearLayout>
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
 

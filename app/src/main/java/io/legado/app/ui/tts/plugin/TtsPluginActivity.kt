@@ -583,15 +583,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                         else -> 0
                     }
                 }
-                toastOnUi("导入了 $count 条")
-                // 在同一个协程中直接加载，不启动新协程
-                allPlugins = withContext(Dispatchers.IO) { JReadVoiceEngine.listPlugins(this@TtsPluginActivity) }
-                pluginsMap = allPlugins.associateBy { it.id }
-                adapter.setPluginsMap(pluginsMap)
-                allGroups = withContext(Dispatchers.IO) { JReadVoiceEngine.listGroups(this@TtsPluginActivity) }
-                allConfigs = withContext(Dispatchers.IO) { JReadVoiceEngine.listConfigs(this@TtsPluginActivity) }
-                rebuildRows()
-                exportEnabledTags()
+                toastOnUi("导入了 $count 条"); loadData()
             } catch (e: Exception) {
                 toastOnUi("导入失败: ${e.message}")
             }

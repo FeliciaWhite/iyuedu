@@ -920,6 +920,22 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             ?.toFloatOrNull()?.coerceIn(0f, 3f) ?: 1.0f
         set(value) = appCtx.putPrefString(PreferKey.convertCacheToWavGain, value.toString())
 
+    // TTS 后处理音频参数（全局级别，默认 1.0，范围 0.1~3.0）
+    var ttsPostSpeed: Float
+        get() = appCtx.getPrefString(PreferKey.ttsPostSpeed, "1.0")
+            ?.toFloatOrNull()?.coerceIn(0.1f, 3f) ?: 1.0f
+        set(value) = appCtx.putPrefString(PreferKey.ttsPostSpeed, value.toString())
+
+    var ttsPostVolume: Float
+        get() = appCtx.getPrefString(PreferKey.ttsPostVolume, "1.0")
+            ?.toFloatOrNull()?.coerceIn(0.1f, 3f) ?: 1.0f
+        set(value) = appCtx.putPrefString(PreferKey.ttsPostVolume, value.toString())
+
+    var ttsPostPitch: Float
+        get() = appCtx.getPrefString(PreferKey.ttsPostPitch, "1.0")
+            ?.toFloatOrNull()?.coerceIn(0.1f, 3f) ?: 1.0f
+        set(value) = appCtx.putPrefString(PreferKey.ttsPostPitch, value.toString())
+
     // 朗读播放时的音量增益倍数（默认 1.0，范围 0.5~5.0，超过自动截断为 5.0）
     var readAloudVolumeGain: Float
         get() = appCtx.getPrefString(PreferKey.readAloudVolumeGain, "1.0")

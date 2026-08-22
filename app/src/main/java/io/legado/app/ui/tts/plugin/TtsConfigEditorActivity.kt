@@ -5,6 +5,7 @@ import android.media.MediaPlayer
 import android.os.Bundle
 import android.view.View
 import android.widget.ArrayAdapter
+import android.widget.Button
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.lifecycle.lifecycleScope
@@ -55,9 +56,12 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         binding.ivSubGroupPicker.setOnClickListener { showSubGroupPicker() }
         // 旧格式不需要风格，隐藏
         binding.etStyle.visibility = View.GONE
-        setupSlider(binding.seekbarSpeed, binding.tvSpeedValue)
-        setupSlider(binding.seekbarVolume, binding.tvVolumeValue)
-        setupSlider(binding.seekbarPitch, binding.tvPitchValue)
+        setupSlider(binding.seekbarSpeed, binding.tvSpeedValue, binding.btnSpeedMinus, binding.btnSpeedPlus)
+        setupSlider(binding.seekbarVolume, binding.tvVolumeValue, binding.btnVolumeMinus, binding.btnVolumePlus)
+        setupSlider(binding.seekbarPitch, binding.tvPitchValue, binding.btnPitchMinus, binding.btnPitchPlus)
+        setupPostSlider(binding.seekbarPostSpeed, binding.tvPostSpeedValue, binding.btnPostSpeedMinus, binding.btnPostSpeedPlus)
+        setupPostSlider(binding.seekbarPostVolume, binding.tvPostVolumeValue, binding.btnPostVolumeMinus, binding.btnPostVolumePlus)
+        setupPostSlider(binding.seekbarPostPitch, binding.tvPostPitchValue, binding.btnPostPitchMinus, binding.btnPostPitchPlus)
         binding.spinnerPlugin.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: android.widget.AdapterView<*>?, v: View?, position: Int, id: Long) { onPluginSelected(position) }
             override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
@@ -76,12 +80,26 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         }
     }
 
-    private fun setupSlider(seekbar: SeekBar, tvValue: TextView) {
+    private fun setupSlider(seekbar: SeekBar, tvValue: TextView, btnMinus: Button, btnPlus: Button) {
         seekbar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) { tvValue.text = String.format("%.2f", progress / 100f) }
             override fun onStartTrackingTouch(sb: SeekBar?) = Unit
             override fun onStopTrackingTouch(sb: SeekBar?) = Unit
         })
+        btnMinus.setOnClickListener { seekbar.progress = (seekbar.progress - 1).coerceAtLeast(0) }
+        btnPlus.setOnClickListener { seekbar.progress = (seekbar.progress + 1).coerceAtMost(300) }
+    }
+
+    private fun setupPostSlider(seekbar: SeekBar, tvValue: TextView, btnMinus: Button, btnPlus: Button) {
+        seekbar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
+                tvValue.text = if (progress == 0) "跟随" else String.format("%.2f", progress / 100f)
+            }
+            override fun onStartTrackingTouch(sb: SeekBar?) = Unit
+            override fun onStopTrackingTouch(sb: SeekBar?) = Unit
+        })
+        btnMinus.setOnClickListener { seekbar.progress = (seekbar.progress - 1).coerceAtLeast(0) }
+        btnPlus.setOnClickListener { seekbar.progress = (seekbar.progress + 1).coerceAtMost(300) }
     }
 
     private fun loadData() {
@@ -110,6 +128,13 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         binding.tvSpeedValue.text = String.format("%.2f", config.speed)
         binding.tvVolumeValue.text = String.format("%.2f", config.volume)
         binding.tvPitchValue.text = String.format("%.2f", config.pitch)
+        // 后处理参数
+        binding.seekbarPostSpeed.progress = if (config.postSpeed <= 0f) 0 else (config.postSpeed * 100).toInt().coerceIn(0, 300)
+        binding.seekbarPostVolume.progress = if (config.postVolume <= 0f) 0 else (config.postVolume * 100).toInt().coerceIn(0, 300)
+        binding.seekbarPostPitch.progress = if (config.postPitch <= 0f) 0 else (config.postPitch * 100).toInt().coerceIn(0, 300)
+        binding.tvPostSpeedValue.text = if (config.postSpeed <= 0f) "跟随" else String.format("%.2f", config.postSpeed)
+        binding.tvPostVolumeValue.text = if (config.postVolume <= 0f) "跟随" else String.format("%.2f", config.postVolume)
+        binding.tvPostPitchValue.text = if (config.postPitch <= 0f) "跟随" else String.format("%.2f", config.postPitch)
         val pluginNames = listOf("单项直连/不使用插件") + plugins.map { TtsPluginAdapter.displayNameForConfigCard(it) }
         binding.spinnerPlugin.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, pluginNames)
         val pluginIdx = plugins.indexOfFirst { it.id == config.pluginId || it.pluginId == config.pluginId }
@@ -240,8 +265,12 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
     private fun showGroupPicker() {
         lifecycleScope.launch {
             val groups = withContext(Dispatchers.IO) {
-                val configs = JReadVoiceEngine.listConfigs(this@TtsConfigEditorActivity)
-                configs.map { it.groupName.ifBlank { "默认分组" } }.distinct().sorted()
+                val voiceGroups = JReadVoiceEngine.listGroups(this@TtsConfigEditorActivity)
+                val groupNames = voiceGroups.map { it.groupName }.filter { it.isNotBlank() }.distinct().sorted()
+                if (groupNames.isEmpty()) {
+                    JReadVoiceEngine.listConfigs(this@TtsConfigEditorActivity)
+                        .map { it.groupName.ifBlank { "默认分组" } }.distinct().sorted()
+                } else groupNames
             }
             if (groups.isEmpty()) { toastOnUi("暂无分组"); return@launch }
             android.app.AlertDialog.Builder(this@TtsConfigEditorActivity)
@@ -255,9 +284,15 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         val currentGroup = binding.etGroup.text.toString().trim()
         lifecycleScope.launch {
             val subGroups = withContext(Dispatchers.IO) {
-                val configs = JReadVoiceEngine.listConfigs(this@TtsConfigEditorActivity)
-                configs.filter { it.groupName.ifBlank { "默认分组" } == currentGroup.ifBlank { "默认分组" } }
-                    .map { it.subGroupName.ifBlank { "默认" } }.distinct().sorted()
+                val voiceGroups = JReadVoiceEngine.listGroups(this@TtsConfigEditorActivity)
+                val subNames = voiceGroups
+                    .filter { it.groupName == currentGroup && it.subGroupName.isNotBlank() }
+                    .map { it.subGroupName }.distinct().sorted()
+                if (subNames.isEmpty()) {
+                    JReadVoiceEngine.listConfigs(this@TtsConfigEditorActivity)
+                        .filter { it.groupName.ifBlank { "默认分组" } == currentGroup.ifBlank { "默认分组" } }
+                        .map { it.subGroupName.ifBlank { "默认" } }.distinct().sorted()
+                } else subNames
             }
             if (subGroups.isEmpty()) { toastOnUi("该分组下暂无子分组"); return@launch }
             android.app.AlertDialog.Builder(this@TtsConfigEditorActivity)
@@ -278,14 +313,6 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
             else -> "$gender$age$number"
         }
         binding.etVoiceTag.setText(tag)
-        if (binding.etGroup.text.isBlank()) binding.etGroup.setText("发音人")
-        if (binding.etSubGroup.text.isBlank()) {
-            val subGroup = when (age) {
-                "少年" -> if (gender == "女") "少女" else "少年"
-                else -> "$gender$age"
-            }
-            binding.etSubGroup.setText(subGroup)
-        }
         toastOnUi("已生成标签: $tag")
     }
 
@@ -382,6 +409,9 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
             speed = binding.seekbarSpeed.progress / 100f,
             volume = binding.seekbarVolume.progress / 100f,
             pitch = binding.seekbarPitch.progress / 100f,
+            postSpeed = binding.seekbarPostSpeed.progress / 100f,
+            postVolume = binding.seekbarPostVolume.progress / 100f,
+            postPitch = binding.seekbarPostPitch.progress / 100f,
             dataJson = buildDataJson(),
         )
     }

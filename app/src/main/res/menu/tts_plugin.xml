@@ -29,6 +29,11 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/menu_global_audio_params"
+        android:title="全局音频调节"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/menu_help"
         android:title="帮助"
         app:showAsAction="never" />

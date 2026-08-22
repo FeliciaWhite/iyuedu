@@ -5,6 +5,8 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.util.Log
 import io.legado.app.constant.AppLog
+import io.legado.app.help.audio.Sonic
+import io.legado.app.help.audiobook.PostAudioParams
 import io.legado.app.help.config.AppConfig
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -28,7 +30,7 @@ object AudioDecodeUtil {
      * @param audioData 原始音频字节数据
      * @return 标准 WAV 文件的 ByteArray，失败返回 null
      */
-    fun decodeToStandardWav(audioData: ByteArray, gain: Float = 1.0f): ByteArray? {
+    fun decodeToStandardWav(audioData: ByteArray, gain: Float = 1.0f, postParams: PostAudioParams? = null): ByteArray? {
         if (audioData.isEmpty()) {
             AppLog.put("$TAG 输入音频数据为空")
             Log.d(TAG, "输入音频数据为空")
@@ -74,8 +76,15 @@ object AudioDecodeUtil {
                 resamplePcm(pcm, srcRate, TARGET_SAMPLE_RATE, srcChannels, TARGET_CHANNELS)
             }
 
+            // Sonic 后处理（语速/音量/音高，三者独立）
+            val processed = if (postParams != null && !postParams.isDefault()) {
+                applySonicProcessing(resampled, TARGET_SAMPLE_RATE, postParams)
+            } else {
+                resampled
+            }
+
             val gain = AppConfig.convertCacheToWavGain
-            val amplified = if (gain != 1.0f) applyVolumeGain(resampled, gain) else resampled
+            val amplified = if (gain != 1.0f) applyVolumeGain(processed, gain) else processed
             writeWavHeaderAndData(amplified, TARGET_SAMPLE_RATE, TARGET_CHANNELS, TARGET_BITS)
         } catch (e: Exception) {
             AppLog.put("$TAG 解码并重采样失败: ${e.message}", e)
@@ -87,7 +96,7 @@ object AudioDecodeUtil {
     /**
      * 将多段音频统一解码、重采样后合并为一个 WAV 文件。
      */
-    fun mergeSegmentsToWav(segments: List<ByteArray>, gain: Float = 1.0f): ByteArray? {
+    fun mergeSegmentsToWav(segments: List<ByteArray>, gain: Float = 1.0f, postParams: PostAudioParams? = null): ByteArray? {
         if (segments.isEmpty()) {
             AppLog.put("$TAG mergeSegmentsToWav 输入为空")
             Log.d(TAG, "mergeSegmentsToWav 输入为空")
@@ -137,8 +146,15 @@ object AudioDecodeUtil {
                 offset += it.size
             }
 
+            // Sonic 后处理（语速/音量/音高，三者独立）
+            val processed = if (postParams != null && !postParams.isDefault()) {
+                applySonicProcessing(mergedPcm, TARGET_SAMPLE_RATE, postParams)
+            } else {
+                mergedPcm
+            }
+
             val gain = AppConfig.convertCacheToWavGain
-            val amplified = if (gain != 1.0f) applyVolumeGain(mergedPcm, gain) else mergedPcm
+            val amplified = if (gain != 1.0f) applyVolumeGain(processed, gain) else processed
             return writeWavHeaderAndData(amplified, TARGET_SAMPLE_RATE, TARGET_CHANNELS, TARGET_BITS)
         } catch (e: Exception) {
             AppLog.put("$TAG 合并段失败: ${e.message}", e)
@@ -174,6 +190,48 @@ object AudioDecodeUtil {
             i += 2
         }
         return out
+    }
+
+    /**
+     * 使用 Sonic 算法对 PCM 进行后处理（语速/音量/音高三者独立调节）。
+     * 输入和输出都是 16bit 小端 PCM，单声道。
+     */
+    private fun applySonicProcessing(pcm: ByteArray, sampleRate: Int, params: PostAudioParams): ByteArray {
+        val resolved = params.resolved()
+        if (resolved.isDefault()) return pcm
+
+        val numSamples = pcm.size / 2
+        val sonic = Sonic(sampleRate, TARGET_CHANNELS)
+        sonic.setSpeed(resolved.speed)
+        sonic.setVolume(resolved.volume)
+        sonic.setPitch(resolved.pitch)
+        sonic.setRate(1.0f)
+
+        // 输入 short 数组
+        val inputSamples = ShortArray(numSamples)
+        for (i in 0 until numSamples) {
+            val lo = pcm[i * 2].toInt() and 0xFF
+            val hi = pcm[i * 2 + 1].toInt()
+            var s = lo or (hi shl 8)
+            if (s > 32767) s -= 65536
+            inputSamples[i] = s.toShort()
+        }
+
+        sonic.writeShortToStream(inputSamples, numSamples)
+        sonic.flushStream()
+
+        // 输出
+        val maxOutSamples = (numSamples / resolved.speed.coerceAtLeast(0.01f)).toInt() + 1024
+        val outputSamples = ShortArray(maxOutSamples)
+        val outLen = sonic.readShortFromStream(outputSamples, maxOutSamples)
+
+        val result = ByteArray(outLen * 2)
+        for (i in 0 until outLen) {
+            val s = outputSamples[i].toInt()
+            result[i * 2] = (s and 0xFF).toByte()
+            result[i * 2 + 1] = ((s shr 8) and 0xFF).toByte()
+        }
+        return result
     }
 
     /** 从 WAV ByteArray 中提取 PCM 数据 */

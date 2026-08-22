@@ -289,6 +289,11 @@ object PreferKey {
     // 朗读播放时的音量增益倍数（默认 1.0，范围 0.5~5.0，超过自动截断为 5.0）
     const val readAloudVolumeGain = "readAloudVolumeGain"
 
+    // TTS 后处理音频参数（全局，默认 1.0）
+    const val ttsPostSpeed = "ttsPostSpeed"
+    const val ttsPostVolume = "ttsPostVolume"
+    const val ttsPostPitch = "ttsPostPitch"
+
     // --- AI 生图配置 ---
     const val readAloudAiImage = "readAloudAiImage"
     // 启用AI生图（每本书单独设置），key = aiImageEnablePrefix_${bookUrl}

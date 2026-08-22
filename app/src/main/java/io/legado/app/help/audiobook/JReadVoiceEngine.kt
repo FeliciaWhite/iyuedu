@@ -72,6 +72,10 @@ object JReadVoiceEngine {
         val subGroupName: String = "",
         val thirdGroupName: String = "",
         val displayName: String = "",
+        val postSpeed: Float = PostAudioParams.FOLLOW,
+        val postVolume: Float = PostAudioParams.FOLLOW,
+        val postPitch: Float = PostAudioParams.FOLLOW,
+        val sortOrder: Int = 0,
     )
 
     data class VoiceTagPool(
@@ -106,6 +110,10 @@ object JReadVoiceEngine {
         val bodyTemplate: String = "",
         val responseAudioPath: String = "",
         val enabled: Boolean = true,
+        val postSpeed: Float = PostAudioParams.FOLLOW,
+        val postVolume: Float = PostAudioParams.FOLLOW,
+        val postPitch: Float = PostAudioParams.FOLLOW,
+        val sortOrder: Int = 0,
     )
 
     fun listConfigs(context: Context, ensureBuiltIns: Boolean = true): List<VoiceConfig> {
@@ -266,6 +274,46 @@ object JReadVoiceEngine {
         return parseVoiceGroups(raw)
     }
 
+    /**
+     * 解析某个 voiceTag 的最终后处理音频参数
+     * 优先级：配置 → 小分组(thirdGroup) → 中分组(subGroup) → 大分组(group) → 全局
+     */
+    fun resolvePostAudioParams(context: Context, voiceTag: String): PostAudioParams {
+        val config = listConfigs(context, ensureBuiltIns = false)
+            .firstOrNull { it.voiceTag == voiceTag }
+            ?: return PostAudioParams(PostAudioParams.DEFAULT, PostAudioParams.DEFAULT, PostAudioParams.DEFAULT)
+
+        val groups = listGroups(context)
+        val globalParams = PostAudioParams(
+            io.legado.app.help.config.AppConfig.ttsPostSpeed,
+            io.legado.app.help.config.AppConfig.ttsPostVolume,
+            io.legado.app.help.config.AppConfig.ttsPostPitch,
+        )
+
+        // 大分组
+        val groupParams = groups
+            .firstOrNull { it.groupName == config.groupName && it.subGroupName.isBlank() && it.thirdGroupName.isBlank() }
+            ?.let { PostAudioParams(it.postSpeed, it.postVolume, it.postPitch).copyIfFollow(globalParams) }
+            ?: globalParams
+
+        // 中分组 (subGroup)
+        val subGroupParams = groups
+            .firstOrNull { it.groupName == config.groupName && it.subGroupName == config.subGroupName && it.thirdGroupName.isBlank() }
+            ?.let { PostAudioParams(it.postSpeed, it.postVolume, it.postPitch).copyIfFollow(groupParams) }
+            ?: groupParams
+
+        // 小分组 (thirdGroup)
+        val thirdGroupParams = groups
+            .firstOrNull { it.groupName == config.groupName && it.subGroupName == config.subGroupName && it.thirdGroupName == config.thirdGroupName }
+            ?.let { PostAudioParams(it.postSpeed, it.postVolume, it.postPitch).copyIfFollow(subGroupParams) }
+            ?: subGroupParams
+
+        // 配置级别
+        return PostAudioParams(config.postSpeed, config.postVolume, config.postPitch)
+            .copyIfFollow(thirdGroupParams)
+            .resolved()
+    }
+
     fun saveGroup(context: Context, group: VoiceGroup) {
         val groupName = group.groupName.trim()
         if (groupName.isBlank()) return
@@ -290,6 +338,30 @@ object JReadVoiceEngine {
             groups += normalized
         }
         saveGroups(context, groups)
+    }
+
+    /**
+     * 持久化配置列表的排序（批量更新 sortOrder）
+     */
+    fun saveConfigsSortOrder(context: Context, orderedConfigIds: List<String>) {
+        val configs = listConfigs(context, ensureBuiltIns = false).toMutableList()
+        val idToOrder = orderedConfigIds.mapIndexed { index, id -> id to index }.toMap()
+        val updated = configs.map { config ->
+            config.copy(sortOrder = idToOrder[config.id] ?: config.sortOrder)
+        }
+        saveConfigs(context, updated)
+    }
+
+    /**
+     * 持久化分组列表的排序（批量更新 sortOrder）
+     */
+    fun saveGroupsSortOrder(context: Context, orderedGroupIds: List<String>) {
+        val groups = listGroups(context).toMutableList()
+        val idToOrder = orderedGroupIds.mapIndexed { index, id -> id to index }.toMap()
+        val updated = groups.map { group ->
+            group.copy(sortOrder = idToOrder[group.id] ?: group.sortOrder)
+        }
+        saveGroups(context, updated)
     }
 
     fun deleteGroup(context: Context, groupName: String, subGroupName: String? = null) {
@@ -1668,7 +1740,7 @@ object JReadVoiceEngine {
         return current?.toString().orEmpty()
     }
 
-    private fun saveGroups(context: Context, groups: List<VoiceGroup>) {
+    fun saveGroups(context: Context, groups: List<VoiceGroup>) {
         val array = JSONArray()
         groups.distinctBy { Triple(it.groupName, it.subGroupName, it.thirdGroupName) }.forEach {
             if (it.groupName.isBlank()) return@forEach
@@ -1688,6 +1760,10 @@ object JReadVoiceEngine {
             .put("subGroupName", group.subGroupName)
             .put("thirdGroupName", group.thirdGroupName)
             .put("displayName", group.displayName)
+            .put("postSpeed", group.postSpeed)
+            .put("postVolume", group.postVolume)
+            .put("postPitch", group.postPitch)
+            .put("sortOrder", group.sortOrder)
     }
 
     private fun parseVoiceGroups(raw: String): List<VoiceGroup> {
@@ -1704,6 +1780,10 @@ object JReadVoiceEngine {
                         subGroupName = obj.optString("subGroupName").trim(),
                         thirdGroupName = obj.optString("thirdGroupName").trim(),
                         displayName = obj.optString("displayName").trim(),
+                        postSpeed = obj.optDouble("postSpeed", PostAudioParams.FOLLOW.toDouble()).toFloat(),
+                        postVolume = obj.optDouble("postVolume", PostAudioParams.FOLLOW.toDouble()).toFloat(),
+                        postPitch = obj.optDouble("postPitch", PostAudioParams.FOLLOW.toDouble()).toFloat(),
+                        sortOrder = obj.optInt("sortOrder", 0),
                     )
                 )
             }
@@ -1718,7 +1798,6 @@ object JReadVoiceEngine {
             val prefs = appContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
             val rawConfigs = prefs.getString(KEY_CONFIGS, "[]").orEmpty()
             val configArray = runCatching { JSONArray(rawConfigs) }.getOrNull() ?: return
-            val migratedConfigs = mutableListOf<VoiceConfig>()
             val migratedArray = JSONArray()
             var configChanged = false
 
@@ -1729,58 +1808,26 @@ object JReadVoiceEngine {
                     continue
                 }
                 val config = parseVoiceConfig(item)
-                val normalized = config?.let { normalizeVoiceConfigForStorage(it) }
-                val groupTarget = normalized?.let { timbreConfigGroupForVoiceTag(it.voiceTag) }
-                if (normalized == null || groupTarget == null) {
+                if (config == null) {
                     migratedArray.put(item)
                     continue
                 }
-
-                migratedConfigs += normalized
+                // 仅规范化 voiceTag，不再用标签强制覆盖分组
+                val normalizedTag = normalizedVoiceTagForConfig(config)
                 val rawVoiceTag = firstText(item, "voiceTag", "tag", "tagName")
-                val rawGroupName = firstText(item, "groupName", "group", "configGroupName")
-                val rawSubGroupName = firstText(item, "subGroupName", "subGroup", "childGroupName", "voiceGroupName", "category")
-                val rawThirdGroupName = firstText(item, "thirdGroupName", "thirdGroup", "ageGroupName")
-                val needsUpdate = rawVoiceTag != normalized.voiceTag ||
-                    rawGroupName != groupTarget.groupName ||
-                    rawSubGroupName != groupTarget.subGroupName ||
-                    rawThirdGroupName != groupTarget.thirdGroupName
-                if (needsUpdate) configChanged = true
-                migratedArray.put(
-                    JSONObject(item.toString())
-                        .put("voiceTag", normalized.voiceTag)
-                        .put("groupName", groupTarget.groupName)
-                        .put("subGroupName", groupTarget.subGroupName)
-                        .put("thirdGroupName", groupTarget.thirdGroupName)
-                )
+                if (rawVoiceTag != normalizedTag) {
+                    configChanged = true
+                    migratedArray.put(
+                        JSONObject(item.toString()).put("voiceTag", normalizedTag)
+                    )
+                } else {
+                    migratedArray.put(item)
+                }
             }
 
             if (configChanged) {
                 prefs.edit().putString(KEY_CONFIGS, migratedArray.toString()).apply()
-            }
-
-            val rawGroups = prefs.getString(KEY_GROUPS, "[]").orEmpty()
-            val existingGroups = parseVoiceGroups(rawGroups)
-            val keptGroups = existingGroups.filterNot { it.isTimbreVoicePoolGroup() }
-            val rebuiltTimbreGroups = migratedConfigs
-                .mapNotNull { timbreConfigGroupForVoiceTag(it.voiceTag) }
-                .map {
-                    VoiceGroup(
-                        groupName = it.groupName,
-                        subGroupName = it.subGroupName,
-                        thirdGroupName = it.thirdGroupName,
-                    )
-                }
-            val rebuiltGroups = keptGroups + rebuiltTimbreGroups
-            val beforeKeys = existingGroups.map { Triple(it.groupName, it.subGroupName, it.thirdGroupName) }
-            val afterKeys = rebuiltGroups
-                .distinctBy { Triple(it.groupName, it.subGroupName, it.thirdGroupName) }
-                .map { Triple(it.groupName, it.subGroupName, it.thirdGroupName) }
-            if (beforeKeys != afterKeys) {
-                saveGroups(appContext, rebuiltGroups)
-            }
-            if (configChanged || beforeKeys != afterKeys) {
-                AppLog.putDebug("[J阅读声音引擎] 已迁移性格分组演员池：${migratedConfigs.size} 项")
+                AppLog.putDebug("[J阅读声音引擎] 已规范化标签格式")
             }
         } finally {
             migratingTimbreVoiceGroups = false
@@ -1793,23 +1840,13 @@ object JReadVoiceEngine {
     }
 
     private fun normalizeVoiceConfigForStorage(config: VoiceConfig): VoiceConfig {
+        // 完全按用户手动设置的分组保存，不再用标签强制覆盖分组
         val normalizedVoiceTag = normalizedVoiceTagForConfig(config)
-        val groupTarget = timbreConfigGroupForVoiceTag(normalizedVoiceTag)
-        // 如果用户手动修改了分组名（与自动计算的不同），则保留用户输入
-        val userOverrideGroup = config.groupName.trim().isNotBlank() &&
-            config.groupName.trim() != groupTarget?.groupName
-        val userOverrideSubGroup = config.subGroupName.trim().isNotBlank() &&
-            config.subGroupName.trim() != groupTarget?.subGroupName
-        val userOverrideThirdGroup = config.thirdGroupName.trim().isNotBlank() &&
-            config.thirdGroupName.trim() != groupTarget?.thirdGroupName
         return config.copy(
             voiceTag = normalizedVoiceTag,
-            groupName = if (userOverrideGroup) config.groupName.trim()
-                else groupTarget?.groupName ?: config.groupName.trim(),
-            subGroupName = if (userOverrideSubGroup) config.subGroupName.trim()
-                else groupTarget?.subGroupName ?: config.subGroupName.trim(),
-            thirdGroupName = if (userOverrideThirdGroup) config.thirdGroupName.trim()
-                else groupTarget?.thirdGroupName ?: config.thirdGroupName.trim(),
+            groupName = config.groupName.trim(),
+            subGroupName = config.subGroupName.trim(),
+            thirdGroupName = config.thirdGroupName.trim(),
         )
     }
 
@@ -1903,6 +1940,10 @@ object JReadVoiceEngine {
             .put("bodyTemplate", config.bodyTemplate)
             .put("responseAudioPath", config.responseAudioPath)
             .put("enabled", config.enabled)
+            .put("postSpeed", config.postSpeed)
+            .put("postVolume", config.postVolume)
+            .put("postPitch", config.postPitch)
+            .put("sortOrder", config.sortOrder)
     }
 
     private fun savePlugins(context: Context, plugins: List<VoicePlugin>) {
@@ -2012,6 +2053,10 @@ object JReadVoiceEngine {
                 .ifBlank { firstText(nestedConfig, "responseAudioPath", "audioPath", "audioUrlPath") }
                 .ifBlank { firstText(source, "responseAudioPath", "audioPath", "audioUrlPath") },
             enabled = obj.optBoolean("enabled", obj.optBoolean("isEnabled", true)),
+            postSpeed = firstNumber(obj, source, "postSpeed") ?: PostAudioParams.FOLLOW,
+            postVolume = firstNumber(obj, source, "postVolume") ?: PostAudioParams.FOLLOW,
+            postPitch = firstNumber(obj, source, "postPitch") ?: PostAudioParams.FOLLOW,
+            sortOrder = firstNumber(obj, source, "sortOrder")?.toInt() ?: 0,
         )
     }
 

@@ -22,6 +22,8 @@ import io.legado.app.R
 import io.legado.app.base.BaseActivity
 import io.legado.app.databinding.ActivityTtsPluginBinding
 import io.legado.app.help.audiobook.JReadVoiceEngine
+import io.legado.app.help.audiobook.PostAudioParams
+import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.utils.setEdgeEffectColor
@@ -56,6 +58,41 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
         binding.recyclerView.adapter = adapter
         binding.recyclerView.addItemDecoration(DividerItemDecoration(this, DividerItemDecoration.VERTICAL))
+        // 长按拖拽排序配置项
+        adapter.onConfigMoved = { orderedIds ->
+            lifecycleScope.launch {
+                withContext(Dispatchers.IO) { JReadVoiceEngine.saveConfigsSortOrder(this@TtsPluginActivity, orderedIds) }
+            }
+        }
+        adapter.onGroupMoved = { orderedGroupNames ->
+            lifecycleScope.launch {
+                withContext(Dispatchers.IO) {
+                    val groups = JReadVoiceEngine.listGroups(this@TtsPluginActivity)
+                    val nameToOrder = orderedGroupNames.mapIndexed { index, name -> name to index }.toMap()
+                    val updated = groups.map { g ->
+                        if (g.subGroupName.isBlank() && g.thirdGroupName.isBlank()) {
+                            g.copy(sortOrder = nameToOrder[g.groupName] ?: g.sortOrder)
+                        } else g
+                    }
+                    JReadVoiceEngine.saveGroups(this@TtsPluginActivity, updated)
+                }
+            }
+        }
+        adapter.onSubGroupMoved = { parentGroupName, orderedSubNames ->
+            lifecycleScope.launch {
+                withContext(Dispatchers.IO) {
+                    val groups = JReadVoiceEngine.listGroups(this@TtsPluginActivity)
+                    val nameToOrder = orderedSubNames.mapIndexed { index, name -> name to index }.toMap()
+                    val updated = groups.map { g ->
+                        if (g.groupName == parentGroupName && g.subGroupName.isNotBlank() && g.thirdGroupName.isBlank()) {
+                            g.copy(sortOrder = nameToOrder[g.subGroupName] ?: g.sortOrder)
+                        } else g
+                    }
+                    JReadVoiceEngine.saveGroups(this@TtsPluginActivity, updated)
+                }
+            }
+        }
+        adapter.createItemTouchHelper().attachToRecyclerView(binding.recyclerView)
 
         binding.tabLayout.addTab(binding.tabLayout.newTab().setText("配置列表"))
         binding.tabLayout.addTab(binding.tabLayout.newTab().setText("插件管理"))
@@ -106,6 +143,9 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
             onGroupDelete = { groupName, subGroupName -> showDeleteGroupDialog(groupName, subGroupName) },
             onGroupReplacePlugin = { groupName, subGroupName -> showReplacePluginDialog(groupName, subGroupName) },
             onGroupOrganizeTags = { _, _ -> showOrganizeTagsDialog() },
+            onGroupAudioParams = { groupName, subGroupName -> showGroupAudioParamsDialog(groupName, subGroupName) },
+            onGroupMoveUp = { groupName, subGroupName -> moveGroup(groupName, subGroupName, up = true) },
+            onGroupMoveDown = { groupName, subGroupName -> moveGroup(groupName, subGroupName, up = false) },
             onPluginClick = { plugin -> showPluginEditor(plugin) },
             onPluginEdit = { plugin -> showPluginEditor(plugin) },
             onPluginToggle = { plugin, enabled -> togglePlugin(plugin, enabled) },
@@ -185,10 +225,17 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
             it.voice.contains(searchQuery, true) || it.locale.contains(searchQuery, true)
         }
         // 合并：从配置项中提取的分组 + 从 listGroups() 读取的分组（含空分组）
+        // 按 sortOrder 排序，sortOrder 相同则按名称
         val configGroupNames = filtered.map { it.groupName.ifBlank { "默认分组" } }.toMutableSet()
         val savedGroupNames = allGroups.map { it.groupName.ifBlank { "默认分组" } }.toSet()
         configGroupNames.addAll(savedGroupNames)
-        val sortedGroupNames = configGroupNames.sorted()
+        val groupSortMap = allGroups
+            .filter { it.subGroupName.isBlank() && it.thirdGroupName.isBlank() }
+            .associate { it.groupName.ifBlank { "默认分组" } to it.sortOrder }
+        val sortedGroupNames = configGroupNames.sortedWith(compareBy(
+            { groupSortMap[it] ?: Int.MAX_VALUE },
+            { it }
+        ))
         val rows = mutableListOf<ConfigListRow>()
         for (groupName in sortedGroupNames) {
             val groupConfigs = filtered.filter { it.groupName.ifBlank { "默认分组" } == groupName }
@@ -203,7 +250,13 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                 val savedSubNames = allGroups.filter { it.groupName.ifBlank { "默认分组" } == groupName }
                     .map { it.subGroupName.ifBlank { "默认" } }.toSet()
                 configSubNames.addAll(savedSubNames)
-                val sortedSubNames = configSubNames.sorted()
+                val subSortMap = allGroups
+                    .filter { it.groupName.ifBlank { "默认分组" } == groupName && it.subGroupName.isNotBlank() && it.thirdGroupName.isBlank() }
+                    .associate { it.subGroupName.ifBlank { "默认" } to it.sortOrder }
+                val sortedSubNames = configSubNames.sortedWith(compareBy(
+                    { subSortMap[it] ?: Int.MAX_VALUE },
+                    { it }
+                ))
                 for (subGroupName in sortedSubNames) {
                     val subConfigs = groupConfigs.filter { it.subGroupName.ifBlank { "默认" } == subGroupName }
                     val subExpanded = expandedSubGroups.contains(Pair(groupName, subGroupName)) || searchQuery.isNotEmpty()
@@ -214,7 +267,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                         rows.add(ConfigListRow.SubGroupHeader(groupName, subGroupName, subExpanded, subConfigs.size, sAllOn, sSomeOn))
                     }
                     if (subExpanded || !hasMultipleSubs) {
-                        subConfigs.sortedWith(compareBy({ it.voiceTag }, { it.displayName })).forEach {
+                        subConfigs.sortedWith(compareBy({ it.sortOrder }, { it.voiceTag }, { it.displayName })).forEach {
                             // 有子分组头时缩进2级，没有时缩进1级
                             rows.add(ConfigListRow.ConfigRow(it, if (hasMultipleSubs) 2 else 1))
                         }
@@ -269,6 +322,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                 if (tags.isEmpty()) toastOnUi("暂无可用标签")
                 else alert("可用标签 (${tags.size})") { setMessage(tags.joinToString("\n")); okButton() }
             }
+            R.id.menu_global_audio_params -> showGlobalAudioParamsDialog()
             R.id.menu_help -> showHelp("ttsPluginHelp")
         }
         return super.onCompatOptionsItemSelected(item)
@@ -410,6 +464,125 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
             .setTitle("一键整理标签").setItems(modes) { _, which -> toastOnUi("整理模式: ${modes[which]}（功能开发中）") }.show()
     }
 
+    private fun moveGroup(groupName: String, subGroupName: String?, up: Boolean) {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                val groups = JReadVoiceEngine.listGroups(this@TtsPluginActivity)
+                if (subGroupName == null) {
+                    // 移动大分组：筛选出大分组级别（subGroupName 为空）
+                    val mainGroups = groups.filter { it.subGroupName.isBlank() && it.thirdGroupName.isBlank() }
+                        .sortedBy { it.sortOrder }
+                    val idx = mainGroups.indexOfFirst { it.groupName == groupName }
+                    if (idx < 0) return@withContext
+                    val swapIdx = if (up) idx - 1 else idx + 1
+                    if (swapIdx < 0 || swapIdx >= mainGroups.size) return@withContext
+                    val a = mainGroups[idx]; val b = mainGroups[swapIdx]
+                    val updated = groups.map { g ->
+                        when (g.id) {
+                            a.id -> g.copy(sortOrder = b.sortOrder)
+                            b.id -> g.copy(sortOrder = a.sortOrder)
+                            else -> g
+                        }
+                    }
+                    JReadVoiceEngine.saveGroups(this@TtsPluginActivity, updated)
+                } else {
+                    // 移动子分组：筛选出同一大分组下的子分组级别
+                    val subGroups = groups
+                        .filter { it.groupName == groupName && it.subGroupName.isNotBlank() && it.thirdGroupName.isBlank() }
+                        .sortedBy { it.sortOrder }
+                    val idx = subGroups.indexOfFirst { it.subGroupName == subGroupName }
+                    if (idx < 0) return@withContext
+                    val swapIdx = if (up) idx - 1 else idx + 1
+                    if (swapIdx < 0 || swapIdx >= subGroups.size) return@withContext
+                    val a = subGroups[idx]; val b = subGroups[swapIdx]
+                    val updated = groups.map { g ->
+                        when (g.id) {
+                            a.id -> g.copy(sortOrder = b.sortOrder)
+                            b.id -> g.copy(sortOrder = a.sortOrder)
+                            else -> g
+                        }
+                    }
+                    JReadVoiceEngine.saveGroups(this@TtsPluginActivity, updated)
+                }
+            }
+            loadData()
+        }
+    }
+
+    private fun showGroupAudioParamsDialog(groupName: String, subGroupName: String?) {
+        lifecycleScope.launch {
+            val groups = withContext(Dispatchers.IO) { JReadVoiceEngine.listGroups(this@TtsPluginActivity) }
+            val group = groups.firstOrNull {
+                it.groupName == groupName &&
+                (subGroupName == null || it.subGroupName == subGroupName) &&
+                it.thirdGroupName.isBlank()
+            }
+            val curSpeed = group?.postSpeed ?: PostAudioParams.FOLLOW
+            val curVolume = group?.postVolume ?: PostAudioParams.FOLLOW
+            val curPitch = group?.postPitch ?: PostAudioParams.FOLLOW
+
+            val container = LinearLayout(this@TtsPluginActivity).apply {
+                orientation = LinearLayout.VERTICAL; setPadding(48, 24, 48, 0)
+            }
+            container.addView(TextView(this@TtsPluginActivity).apply {
+                text = "音频后处理调节（合成后生效）\n0 = 跟随上级，1.0 = 不调整"
+                textSize = 12f; setPadding(4, 4, 4, 12)
+            })
+            val (sbSpeed, _, _) = buildSliderRow("语速", if (curSpeed <= 0f) 0 else (curSpeed * 100).toInt(), true)
+            val (sbVol, _, _) = buildSliderRow("音量", if (curVolume <= 0f) 0 else (curVolume * 100).toInt(), true)
+            val (sbPitch, _, _) = buildSliderRow("音高", if (curPitch <= 0f) 0 else (curPitch * 100).toInt(), true)
+            listOf(sbSpeed, sbVol, sbPitch).forEach { container.addView(it.tag as android.view.View) }
+            alert("音频调节 - ${subGroupName ?: groupName}") {
+                customView { container }
+                okButton {
+                    val speed = sbSpeed.progress / 100f
+                    val volume = sbVol.progress / 100f
+                    val pitch = sbPitch.progress / 100f
+                    lifecycleScope.launch {
+                        withContext(Dispatchers.IO) {
+                            val existing = JReadVoiceEngine.listGroups(this@TtsPluginActivity)
+                                .firstOrNull { it.groupName == groupName && (subGroupName == null || it.subGroupName == subGroupName) && it.thirdGroupName.isBlank() }
+                            val updated = (existing ?: JReadVoiceEngine.VoiceGroup(groupName = groupName, subGroupName = subGroupName ?: "")).copy(
+                                postSpeed = speed, postVolume = volume, postPitch = pitch
+                            )
+                            JReadVoiceEngine.saveGroup(this@TtsPluginActivity, updated)
+                        }
+                        toastOnUi("已更新音频调节"); loadData()
+                    }
+                }
+                cancelButton()
+            }.show()
+        }
+    }
+
+    private fun showGlobalAudioParamsDialog() {
+        val curSpeed = AppConfig.ttsPostSpeed
+        val curVolume = AppConfig.ttsPostVolume
+        val curPitch = AppConfig.ttsPostPitch
+
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(48, 24, 48, 0)
+        }
+        container.addView(TextView(this).apply {
+            text = "全局音频后处理调节（合成后生效）\n1.0 = 不调整，范围 0.1~3.0"
+            textSize = 12f; setPadding(4, 4, 4, 12)
+        })
+        val (sbSpeed, _, _) = buildSliderRow("语速", (curSpeed * 100).toInt().coerceIn(1, 300), false)
+        val (sbVol, _, _) = buildSliderRow("音量", (curVolume * 100).toInt().coerceIn(1, 300), false)
+        val (sbPitch, _, _) = buildSliderRow("音高", (curPitch * 100).toInt().coerceIn(1, 300), false)
+        listOf(sbSpeed, sbVol, sbPitch).forEach { container.addView(it.tag as android.view.View) }
+        alert("全局音频调节") {
+            customView { container }
+            okButton {
+                AppConfig.ttsPostSpeed = sbSpeed.progress / 100f
+                AppConfig.ttsPostVolume = sbVol.progress / 100f
+                AppConfig.ttsPostPitch = sbPitch.progress / 100f
+                toastOnUi("已更新全局音频调节")
+            }
+            cancelButton()
+        }.show()
+    }
+
     private fun showAddGroupDialog() {
         val etGroup = EditText(this).apply { hint = "一级分组名称"; setPadding(48, 24, 48, 24) }
         val etSubGroup = EditText(this).apply { hint = "二级分组名称 (可选)"; setPadding(48, 24, 48, 24) }
@@ -535,26 +708,74 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
         }
     }
 
+    /**
+     * 构建一个滑块行：标签+数值居中在上方，减号+滑块+加号在下方
+     * @param label 标签名（语速/音量/音高/音调）
+     * @param initialProgress 初始进度 (0~300)
+     * @param allowFollow 是否支持"跟随"（progress=0 时显示"跟随"）
+     * @return Triple(SeekBar, TextView, 更新显示的函数)
+     */
+    private fun buildSliderRow(
+        label: String, initialProgress: Int, allowFollow: Boolean
+    ): Triple<SeekBar, TextView, () -> Unit> {
+        val ctx = this
+        val density = resources.displayMetrics.density
+        val sb = SeekBar(ctx).apply { max = 300; progress = initialProgress }
+        val tvVal = TextView(ctx).apply {
+            textSize = 13f
+            text = if (allowFollow && initialProgress == 0) "跟随" else String.format("%.2f", initialProgress / 100f)
+        }
+        val updateText: () -> Unit = {
+            val p = sb.progress
+            tvVal.text = if (allowFollow && p == 0) "跟随" else String.format("%.2f", p / 100f)
+        }
+        sb.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(s: SeekBar?, p: Int, u: Boolean) = updateText()
+            override fun onStartTrackingTouch(s: SeekBar?) = Unit
+            override fun onStopTrackingTouch(s: SeekBar?) = Unit
+        })
+        // 标签+数值行（居中）
+        val labelRow = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER
+            addView(TextView(ctx).apply { text = label; textSize = 13f; setTextColor(android.graphics.Color.parseColor("#FF333333")) })
+            addView(TextView(ctx).apply { text = "  "; textSize = 13f })
+            addView(tvVal)
+        }
+        // 滑块行（减号 + 滑块 + 加号）
+        val sliderRow = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+            val btnMinus = android.widget.Button(ctx).apply {
+                text = "−"; textSize = 18f; layoutParams = LinearLayout.LayoutParams((40 * density).toInt(), (36 * density).toInt())
+                minWidth = 0; minHeight = 0; setPadding(0, 0, 0, 0)
+                setOnClickListener { sb.progress = (sb.progress - 1).coerceAtLeast(0) }
+            }
+            val sbParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            val btnPlus = android.widget.Button(ctx).apply {
+                text = "+"; textSize = 18f; layoutParams = LinearLayout.LayoutParams((40 * density).toInt(), (36 * density).toInt())
+                minWidth = 0; minHeight = 0; setPadding(0, 0, 0, 0)
+                setOnClickListener { sb.progress = (sb.progress + 1).coerceAtMost(300) }
+            }
+            addView(btnMinus); addView(sb, sbParams); addView(btnPlus)
+        }
+        // 外层垂直布局
+        val outer = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(labelRow); addView(sliderRow)
+        }
+        // 用 tag 存 outer，调用方 addView(outer) 即可
+        sb.tag = outer
+        return Triple(sb, tvVal, updateText)
+    }
+
     private fun showPluginAudioParams(plugin: JReadVoiceEngine.VoicePlugin) {
         val configs = allConfigs.filter { it.pluginId == plugin.id || it.pluginId == plugin.pluginId }
         val firstConfig = configs.firstOrNull()
         val container = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(48, 24, 48, 0) }
         container.addView(TextView(this).apply { text = "${plugin.name} (${configs.size}个音色项)"; textSize = 14f; setPadding(4, 4, 4, 12) })
-        val sbSpeed = SeekBar(this).apply { max = 300; progress = ((firstConfig?.speed ?: 1f) * 100).toInt() }
-        val sbVol = SeekBar(this).apply { max = 300; progress = ((firstConfig?.volume ?: 1f) * 100).toInt() }
-        val sbPitch = SeekBar(this).apply { max = 300; progress = ((firstConfig?.pitch ?: 1f) * 100).toInt() }
-        val tvSpeedVal = TextView(this).apply { text = String.format("%.2f", sbSpeed.progress / 100f); textSize = 11f }
-        val tvVolVal = TextView(this).apply { text = String.format("%.2f", sbVol.progress / 100f); textSize = 11f }
-        val tvPitchVal = TextView(this).apply { text = String.format("%.2f", sbPitch.progress / 100f); textSize = 11f }
-        listOf(Triple("语速", sbSpeed, tvSpeedVal), Triple("音量", sbVol, tvVolVal), Triple("音调", sbPitch, tvPitchVal)).forEach { (label, sb, tv) ->
-            container.addView(TextView(this).apply { text = label; textSize = 12f })
-            container.addView(sb); container.addView(tv)
-            sb.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: SeekBar?, p: Int, u: Boolean) { tv.text = String.format("%.2f", p / 100f) }
-                override fun onStartTrackingTouch(s: SeekBar?) = Unit
-                override fun onStopTrackingTouch(s: SeekBar?) = Unit
-            })
-        }
+        val (sbSpeed, _, _) = buildSliderRow("语速", ((firstConfig?.speed ?: 1f) * 100).toInt(), false)
+        val (sbVol, _, _) = buildSliderRow("音量", ((firstConfig?.volume ?: 1f) * 100).toInt(), false)
+        val (sbPitch, _, _) = buildSliderRow("音调", ((firstConfig?.pitch ?: 1f) * 100).toInt(), false)
+        listOf(sbSpeed, sbVol, sbPitch).forEach { container.addView(it.tag as android.view.View) }
         alert("音频参数") {
             customView { container }
             okButton {

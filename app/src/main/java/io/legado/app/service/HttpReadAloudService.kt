@@ -223,10 +223,16 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
      * TTS 音频获取结果
      */
     private sealed class TtsSpeakResult {
-        data class Single(val stream: InputStream) : TtsSpeakResult()
+        data class Single(
+            val stream: InputStream,
+            val forceConvertToWav: Boolean = false,
+            val postAudioParams: io.legado.app.help.audiobook.PostAudioParams? = null
+        ) : TtsSpeakResult()
         data class MultiSegment(
             val segments: List<ByteArray>,
-            val ranges: List<Pair<Int, Int>> = emptyList()
+            val ranges: List<Pair<Int, Int>> = emptyList(),
+            val forceConvertToWav: Boolean = false,
+            val postAudioParams: io.legado.app.help.audiobook.PostAudioParams? = null
         ) : TtsSpeakResult()
         data class Url(val url: String) : TtsSpeakResult()
     }
@@ -496,9 +502,9 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                         runCatching {
                             when (val speakResult = getSpeakStreamResult(httpTts, speakText)) {
                                 is TtsSpeakResult.MultiSegment -> {
-                                    if (AppConfig.convertCacheToWav) {
+                                    if (AppConfig.convertCacheToWav || speakResult.forceConvertToWav) {
                                         // 统一解码、重采样为 24000Hz WAV
-                                        val wavBytes = io.legado.app.utils.AudioDecodeUtil.mergeSegmentsToWav(speakResult.segments)
+                                        val wavBytes = io.legado.app.utils.AudioDecodeUtil.mergeSegmentsToWav(speakResult.segments, postParams = speakResult.postAudioParams)
                                         if (wavBytes != null) {
                                             createSpeakFile(fileName, ByteArrayInputStream(wavBytes))
                                             val file = getSpeakFileAsMd5(fileName)
@@ -520,9 +526,9 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                                     }
                                 }
                                 is TtsSpeakResult.Single -> {
-                                    if (AppConfig.convertCacheToWav) {
+                                    if (AppConfig.convertCacheToWav || speakResult.forceConvertToWav) {
                                         val bytes = speakResult.stream.readBytes()
-                                        val wavBytes = io.legado.app.utils.AudioDecodeUtil.decodeToStandardWav(bytes)
+                                        val wavBytes = io.legado.app.utils.AudioDecodeUtil.decodeToStandardWav(bytes, postParams = speakResult.postAudioParams)
                                         if (wavBytes != null) {
                                             createSpeakFile(fileName, ByteArrayInputStream(wavBytes))
                                         } else {
@@ -632,8 +638,8 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                         runCatching {
                             when (val speakResult = getSpeakStreamResult(httpTts, speakText)) {
                                 is TtsSpeakResult.MultiSegment -> {
-                                    if (AppConfig.convertCacheToWav) {
-                                        val wavBytes = io.legado.app.utils.AudioDecodeUtil.mergeSegmentsToWav(speakResult.segments)
+                                    if (AppConfig.convertCacheToWav || speakResult.forceConvertToWav) {
+                                        val wavBytes = io.legado.app.utils.AudioDecodeUtil.mergeSegmentsToWav(speakResult.segments, postParams = speakResult.postAudioParams)
                                         if (wavBytes != null) {
                                             createSpeakFile(fileName, ByteArrayInputStream(wavBytes))
                                         } else {
@@ -649,9 +655,9 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                                     }
                                 }
                                 is TtsSpeakResult.Single -> {
-                                    if (AppConfig.convertCacheToWav) {
+                                    if (AppConfig.convertCacheToWav || speakResult.forceConvertToWav) {
                                         val bytes = speakResult.stream.readBytes()
-                                        val wavBytes = io.legado.app.utils.AudioDecodeUtil.decodeToStandardWav(bytes)
+                                        val wavBytes = io.legado.app.utils.AudioDecodeUtil.decodeToStandardWav(bytes, postParams = speakResult.postAudioParams)
                                         if (wavBytes != null) {
                                             createSpeakFile(fileName, ByteArrayInputStream(wavBytes))
                                         } else {
@@ -728,8 +734,8 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                         runCatching {
                             when (val speakResult = getSpeakStreamResult(httpTts, speakText)) {
                                 is TtsSpeakResult.MultiSegment -> {
-                                    if (AppConfig.convertCacheToWav) {
-                                        val wavBytes = io.legado.app.utils.AudioDecodeUtil.mergeSegmentsToWav(speakResult.segments)
+                                    if (AppConfig.convertCacheToWav || speakResult.forceConvertToWav) {
+                                        val wavBytes = io.legado.app.utils.AudioDecodeUtil.mergeSegmentsToWav(speakResult.segments, postParams = speakResult.postAudioParams)
                                         if (wavBytes != null) {
                                             createSpeakFile(fileName, ByteArrayInputStream(wavBytes))
                                             val file = getSpeakFileAsMd5(fileName)
@@ -751,12 +757,32 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                                     }
                                 }
                                 is TtsSpeakResult.Single -> {
-                                    val dataSourceFactory = createDataSourceFactory(httpTts, speakText)
-                                    val downloader = createDownloader(dataSourceFactory, fileName)
-                                    downloaderChannel.send(downloader)
-                                    val mediaSource = createMediaSource(dataSourceFactory, fileName)
-                                    launch(Dispatchers.Main) {
-                                        exoPlayer.addMediaSource(mediaSource)
+                                    if (speakResult.forceConvertToWav) {
+                                        val bytes = speakResult.stream.readBytes()
+                                        val wavBytes = io.legado.app.utils.AudioDecodeUtil.decodeToStandardWav(bytes, postParams = speakResult.postAudioParams)
+                                        if (wavBytes != null) {
+                                            createSpeakFile(fileName, ByteArrayInputStream(wavBytes))
+                                        } else {
+                                            createSpeakFile(fileName, ByteArrayInputStream(bytes))
+                                        }
+                                        val file = getSpeakFileAsMd5(fileName)
+                                        if (file.exists()) {
+                                            val mediaItem = MediaItem.Builder()
+                                                .setMediaId("$index")
+                                                .setUri(Uri.fromFile(file))
+                                                .build()
+                                            launch(Dispatchers.Main) {
+                                                exoPlayer.addMediaSource(createLocalMediaSource(mediaItem))
+                                            }
+                                        }
+                                    } else {
+                                        val dataSourceFactory = createDataSourceFactory(httpTts, speakText)
+                                        val downloader = createDownloader(dataSourceFactory, fileName)
+                                        downloaderChannel.send(downloader)
+                                        val mediaSource = createMediaSource(dataSourceFactory, fileName)
+                                        launch(Dispatchers.Main) {
+                                            exoPlayer.addMediaSource(mediaSource)
+                                        }
                                     }
                                 }
                                 is TtsSpeakResult.Url -> {
@@ -842,8 +868,8 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                     if (hasSpeakFile(fileName)) return@forEachIndexed
                     when (val speakResult = getSpeakStreamResult(httpTts, speakText)) {
                         is TtsSpeakResult.MultiSegment -> {
-                            if (AppConfig.convertCacheToWav) {
-                                val wavBytes = io.legado.app.utils.AudioDecodeUtil.mergeSegmentsToWav(speakResult.segments)
+                            if (AppConfig.convertCacheToWav || speakResult.forceConvertToWav) {
+                                val wavBytes = io.legado.app.utils.AudioDecodeUtil.mergeSegmentsToWav(speakResult.segments, postParams = speakResult.postAudioParams)
                                 if (wavBytes != null) {
                                     createSpeakFile(fileName, ByteArrayInputStream(wavBytes))
                                 } else {
@@ -1077,18 +1103,26 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
             var retryCount = 0
             while (true) {
                 try {
+                    io.legado.app.help.audiobook.TtsPluginJsBridge.resetSynthesizeFlag()
                     val jsResult = httpTts.evalJS(WEBSOCKET_JS_BRIDGE + jsCode) {
                         put("speakText", speakText)
                         put("speechRate", speechRate)
                         put("ws", wsHelper)
                     }
+                    val ttsUsed = io.legado.app.help.audiobook.TtsPluginJsBridge.synthesizeCalled
+                    val postParams = if (ttsUsed) {
+                        val tag = io.legado.app.help.audiobook.TtsPluginJsBridge.lastVoiceTag
+                        if (tag.isNotBlank()) {
+                            io.legado.app.help.audiobook.JReadVoiceEngine.resolvePostAudioParams(appCtx, tag)
+                        } else null
+                    } else null
                     when (jsResult) {
-                        is InputStream -> return TtsSpeakResult.Single(jsResult)
+                        is InputStream -> return TtsSpeakResult.Single(jsResult, forceConvertToWav = ttsUsed, postAudioParams = postParams)
                         is ByteArray -> {
                             val segments = wsHelper.lastSegmentedBuffer?.getSegments()
                             if (segments != null && segments.size > 1) {
                                 val ranges = wsHelper.lastSegmentedBuffer?.getSegmentRanges() ?: emptyList()
-                                return TtsSpeakResult.MultiSegment(segments, ranges)
+                                return TtsSpeakResult.MultiSegment(segments, ranges, forceConvertToWav = ttsUsed, postAudioParams = postParams)
                             }
                             // 兜底：脚本直接拼接的 ByteArray 也做自动拆分
                             val splitSegments = splitMixedAudioBytes(jsResult)
@@ -1098,9 +1132,9 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                                     val offset = splitSegments.take(idx).sumOf { it.size }
                                     offset to seg.size
                                 }
-                                return TtsSpeakResult.MultiSegment(splitSegments, ranges)
+                                return TtsSpeakResult.MultiSegment(splitSegments, ranges, forceConvertToWav = ttsUsed, postAudioParams = postParams)
                             }
-                            return TtsSpeakResult.Single(ByteArrayInputStream(jsResult))
+                            return TtsSpeakResult.Single(ByteArrayInputStream(jsResult), forceConvertToWav = ttsUsed, postAudioParams = postParams)
                         }
                         is String -> {
                             ttsUrl = jsResult
@@ -1129,18 +1163,26 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
             val jsStr = httpTts.loginCheckJs
             if (!jsStr.isNullOrBlank()) {
                 try {
+                    io.legado.app.help.audiobook.TtsPluginJsBridge.resetSynthesizeFlag()
                     val jsResult = httpTts.evalJS(WEBSOCKET_JS_BRIDGE + jsStr) {
                         put("speakText", speakText)
                         put("speechRate", speechRate)
                         put("ws", wsHelper)
                     }
+                    val ttsUsed = io.legado.app.help.audiobook.TtsPluginJsBridge.synthesizeCalled
+                    val postParams = if (ttsUsed) {
+                        val tag = io.legado.app.help.audiobook.TtsPluginJsBridge.lastVoiceTag
+                        if (tag.isNotBlank()) {
+                            io.legado.app.help.audiobook.JReadVoiceEngine.resolvePostAudioParams(appCtx, tag)
+                        } else null
+                    } else null
                     when (jsResult) {
-                        is InputStream -> return TtsSpeakResult.Single(jsResult)
+                        is InputStream -> return TtsSpeakResult.Single(jsResult, forceConvertToWav = ttsUsed, postAudioParams = postParams)
                         is ByteArray -> {
                             val segments = wsHelper.lastSegmentedBuffer?.getSegments()
                             if (segments != null && segments.size > 1) {
                                 val ranges = wsHelper.lastSegmentedBuffer?.getSegmentRanges() ?: emptyList()
-                                return TtsSpeakResult.MultiSegment(segments, ranges)
+                                return TtsSpeakResult.MultiSegment(segments, ranges, forceConvertToWav = ttsUsed, postAudioParams = postParams)
                             }
                             val splitSegments = splitMixedAudioBytes(jsResult)
                             if (splitSegments.size > 1) {
@@ -1149,9 +1191,9 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                                     val offset = splitSegments.take(idx).sumOf { it.size }
                                     offset to seg.size
                                 }
-                                return TtsSpeakResult.MultiSegment(splitSegments, ranges)
+                                return TtsSpeakResult.MultiSegment(splitSegments, ranges, forceConvertToWav = ttsUsed, postAudioParams = postParams)
                             }
-                            return TtsSpeakResult.Single(ByteArrayInputStream(jsResult))
+                            return TtsSpeakResult.Single(ByteArrayInputStream(jsResult), forceConvertToWav = ttsUsed, postAudioParams = postParams)
                         }
                     }
                 } catch (e: Exception) {

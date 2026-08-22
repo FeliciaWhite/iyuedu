@@ -673,7 +673,7 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
             CharacterManagerDialog().show(childFragmentManager, "characterManagerDialog")
         }
         llConfigList.setOnClickListener {
-            ConfigListDialog().show(childFragmentManager, "configListDialog")
+            startActivity(android.content.Intent(requireContext(), io.legado.app.ui.tts.plugin.TtsPluginActivity::class.java))
         }
         // 打开当前 TTS 应用
         llOpenTtsApp.setOnClickListener {

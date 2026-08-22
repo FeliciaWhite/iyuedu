@@ -29,6 +29,22 @@ class TtsPluginJsBridge {
 
     companion object {
         private const val TAG = "TtsPluginJsBridge"
+
+        @Volatile
+        @JvmStatic
+        var synthesizeCalled: Boolean = false
+            private set
+
+        @Volatile
+        @JvmStatic
+        var lastVoiceTag: String = ""
+            private set
+
+        @JvmStatic
+        fun resetSynthesizeFlag() {
+            synthesizeCalled = false
+            lastVoiceTag = ""
+        }
     }
 
     private val context: Context = appCtx
@@ -41,6 +57,8 @@ class TtsPluginJsBridge {
      * @return 音频字节数组 (PCM 24000Hz)，失败返回 null
      */
     fun synthesize(voiceTag: String, text: String): ByteArray? {
+        synthesizeCalled = true
+        lastVoiceTag = voiceTag
         if (voiceTag.isBlank() || text.isBlank()) {
             AppLog.putDebug("[TtsPluginJsBridge] synthesize 参数为空: tag=$voiceTag textLen=${text.length}")
             return null
@@ -64,12 +82,14 @@ class TtsPluginJsBridge {
      * @return 音频字节数组，失败返回 null
      */
     fun synthesizeByConfigId(configId: String, text: String): ByteArray? {
+        synthesizeCalled = true
         if (configId.isBlank() || text.isBlank()) return null
         val config = JReadVoiceEngine.listConfigs(context).firstOrNull { it.id == configId }
             ?: run {
                 AppLog.putDebug("[TtsPluginJsBridge] 未找到配置: configId=$configId")
                 return null
             }
+        lastVoiceTag = config.voiceTag
         val requestId = UUID.randomUUID().toString()
         val pointerJson = JSONObject().put("voiceTag", config.voiceTag).toString()
         return try {

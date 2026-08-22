@@ -7,6 +7,7 @@ import android.widget.CheckBox
 import android.widget.ImageView
 import android.widget.PopupMenu
 import android.widget.TextView
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
 import io.legado.app.help.audiobook.JReadVoiceEngine
@@ -28,6 +29,9 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     private var onGroupDelete: ((String, String?) -> Unit)? = null
     private var onGroupReplacePlugin: ((String, String?) -> Unit)? = null
     private var onGroupOrganizeTags: ((String, String?) -> Unit)? = null
+    private var onGroupAudioParams: ((String, String?) -> Unit)? = null
+    private var onGroupMoveUp: ((String, String?) -> Unit)? = null
+    private var onGroupMoveDown: ((String, String?) -> Unit)? = null
     private var onPluginClick: ((JReadVoiceEngine.VoicePlugin) -> Unit)? = null
     private var onPluginEdit: ((JReadVoiceEngine.VoicePlugin) -> Unit)? = null
     private var onPluginToggle: ((JReadVoiceEngine.VoicePlugin, Boolean) -> Unit)? = null
@@ -36,6 +40,197 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     fun setRows(newRows: List<ConfigListRow>) { rows.clear(); rows.addAll(newRows); notifyDataSetChanged() }
     fun setPluginsMap(map: Map<String, JReadVoiceEngine.VoicePlugin>) { pluginsMap = map }
+
+    var onConfigMoved: ((List<String>) -> Unit)? = null
+    var onGroupMoved: ((List<String>) -> Unit)? = null  // group names order
+    var onSubGroupMoved: ((String, List<String>) -> Unit)? = null  // parent groupName, subGroup names order
+
+    /**
+     * 交换两个相邻 ConfigRow 的位置（仅限同一子分组内）
+     */
+    fun moveConfig(fromPos: Int, toPos: Int): Boolean {
+        if (fromPos !in rows.indices || toPos !in rows.indices) return false
+        val fromRow = rows[fromPos]
+        val toRow = rows[toPos]
+        if (fromRow is ConfigListRow.ConfigRow && toRow is ConfigListRow.ConfigRow) {
+            val fc = fromRow.config
+            val tc = toRow.config
+            // 仅允许同一分组+子分组内移动
+            if (fc.groupName == tc.groupName && fc.subGroupName == tc.subGroupName) {
+                java.util.Collections.swap(rows, fromPos, toPos)
+                notifyItemMoved(fromPos, toPos)
+                return true
+            }
+        }
+        return false
+    }
+
+    /**
+     * 移动整个分组块（GroupHeader + 所有子项）到目标 GroupHeader 位置
+     */
+    fun moveGroupBlock(fromPos: Int, toPos: Int): Boolean {
+        if (fromPos !in rows.indices || toPos !in rows.indices) return false
+        val fromRow = rows[fromPos]
+        val toRow = rows[toPos]
+        // 只允许 GroupHeader 拖到 GroupHeader
+        if (fromRow !is ConfigListRow.GroupHeader || toRow !is ConfigListRow.GroupHeader) return false
+        if (fromPos == toPos) return false
+
+        // 找到 from 分组块的范围 [fromPos, fromEnd)
+        var fromEnd = fromPos + 1
+        while (fromEnd < rows.size && rows[fromEnd] !is ConfigListRow.GroupHeader) {
+            fromEnd++
+        }
+        // 找到 to 分组块的范围 [toPos, toEnd)
+        var toEnd = toPos + 1
+        while (toEnd < rows.size && rows[toEnd] !is ConfigListRow.GroupHeader) {
+            toEnd++
+        }
+
+        // 提取 from 块和 to 块
+        val fromBlock = rows.subList(fromPos, fromEnd).toList()
+        val toBlock = rows.subList(toPos, toEnd).toList()
+
+        // 重建 rows
+        val newRows = mutableListOf<ConfigListRow>()
+        if (fromPos < toPos) {
+            // 向下拖：from 块移到 to 块后面
+            newRows.addAll(rows.subList(0, fromPos))
+            newRows.addAll(rows.subList(fromEnd, toPos))
+            newRows.addAll(toBlock)
+            newRows.addAll(fromBlock)
+            newRows.addAll(rows.subList(toEnd, rows.size))
+        } else {
+            // 向上拖：from 块移到 to 块前面
+            newRows.addAll(rows.subList(0, toPos))
+            newRows.addAll(fromBlock)
+            newRows.addAll(toBlock)
+            newRows.addAll(rows.subList(fromEnd, rows.size))
+        }
+
+        rows.clear()
+        rows.addAll(newRows)
+        notifyDataSetChanged()
+        return true
+    }
+
+    /**
+     * 移动整个子分组块（SubGroupHeader + 其下所有 ConfigRow）到目标 SubGroupHeader 位置
+     */
+    fun moveSubGroupBlock(fromPos: Int, toPos: Int): Boolean {
+        if (fromPos !in rows.indices || toPos !in rows.indices) return false
+        val fromRow = rows[fromPos]
+        val toRow = rows[toPos]
+        // 只允许 SubGroupHeader 拖到 SubGroupHeader，且必须在同一大分组内
+        if (fromRow !is ConfigListRow.SubGroupHeader || toRow !is ConfigListRow.SubGroupHeader) return false
+        if (fromRow.groupName != toRow.groupName) return false
+        if (fromPos == toPos) return false
+
+        // 找到 from 子分组块的范围 [fromPos, fromEnd)
+        var fromEnd = fromPos + 1
+        while (fromEnd < rows.size &&
+            rows[fromEnd] !is ConfigListRow.GroupHeader &&
+            rows[fromEnd] !is ConfigListRow.SubGroupHeader) {
+            fromEnd++
+        }
+        // 找到 to 子分组块的范围 [toPos, toEnd)
+        var toEnd = toPos + 1
+        while (toEnd < rows.size &&
+            rows[toEnd] !is ConfigListRow.GroupHeader &&
+            rows[toEnd] !is ConfigListRow.SubGroupHeader) {
+            toEnd++
+        }
+
+        val fromBlock = rows.subList(fromPos, fromEnd).toList()
+        val toBlock = rows.subList(toPos, toEnd).toList()
+
+        val newRows = mutableListOf<ConfigListRow>()
+        if (fromPos < toPos) {
+            newRows.addAll(rows.subList(0, fromPos))
+            newRows.addAll(rows.subList(fromEnd, toPos))
+            newRows.addAll(toBlock)
+            newRows.addAll(fromBlock)
+            newRows.addAll(rows.subList(toEnd, rows.size))
+        } else {
+            newRows.addAll(rows.subList(0, toPos))
+            newRows.addAll(fromBlock)
+            newRows.addAll(toBlock)
+            newRows.addAll(rows.subList(fromEnd, rows.size))
+        }
+
+        rows.clear()
+        rows.addAll(newRows)
+        notifyDataSetChanged()
+        return true
+    }
+
+    /**
+     * 获取当前所有 ConfigRow 的 configId 顺序（用于持久化）
+     */
+    fun getConfigIdOrder(): List<String> {
+        return rows.filterIsInstance<ConfigListRow.ConfigRow>().map { it.config.id }
+    }
+
+    /**
+     * 获取当前所有大分组的名称顺序（用于持久化 sortOrder）
+     */
+    fun getGroupNameOrder(): List<String> {
+        return rows.filterIsInstance<ConfigListRow.GroupHeader>().map { it.groupName }
+    }
+
+    /**
+     * 获取每个大分组下子分组的名称顺序（用于持久化 sortOrder）
+     * 返回 Map<groupName, List<subGroupName>>
+     */
+    fun getSubGroupNameOrders(): Map<String, List<String>> {
+        val result = mutableMapOf<String, MutableList<String>>()
+        var currentGroup = ""
+        for (row in rows) {
+            when (row) {
+                is ConfigListRow.GroupHeader -> currentGroup = row.groupName
+                is ConfigListRow.SubGroupHeader -> {
+                    result.getOrPut(currentGroup) { mutableListOf() }.add(row.subGroupName)
+                }
+                else -> Unit
+            }
+        }
+        return result
+    }
+
+    fun createItemTouchHelper(): ItemTouchHelper {
+        val callback = object : ItemTouchHelper.Callback() {
+            override fun getMovementFlags(rv: RecyclerView, vh: RecyclerView.ViewHolder): Int {
+                return when (rows.getOrNull(vh.bindingAdapterPosition)) {
+                    is ConfigListRow.ConfigRow,
+                    is ConfigListRow.GroupHeader,
+                    is ConfigListRow.SubGroupHeader -> makeMovementFlags(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0)
+                    else -> 0
+                }
+            }
+            override fun isLongPressDragEnabled(): Boolean = true
+            override fun onMove(rv: RecyclerView, vh: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
+                val fromPos = vh.bindingAdapterPosition
+                val toPos = target.bindingAdapterPosition
+                val fromRow = rows.getOrNull(fromPos)
+                return when (fromRow) {
+                    is ConfigListRow.GroupHeader -> moveGroupBlock(fromPos, toPos)
+                    is ConfigListRow.SubGroupHeader -> moveSubGroupBlock(fromPos, toPos)
+                    is ConfigListRow.ConfigRow -> moveConfig(fromPos, toPos)
+                    else -> false
+                }
+            }
+            override fun onSwiped(vh: RecyclerView.ViewHolder, dir: Int) = Unit
+            override fun clearView(rv: RecyclerView, vh: RecyclerView.ViewHolder) {
+                super.clearView(rv, vh)
+                onConfigMoved?.invoke(getConfigIdOrder())
+                onGroupMoved?.invoke(getGroupNameOrder())
+                getSubGroupNameOrders().forEach { (groupName, subNames) ->
+                    onSubGroupMoved?.invoke(groupName, subNames)
+                }
+            }
+        }
+        return ItemTouchHelper(callback)
+    }
 
     fun setCallbacks(
         onConfigClick: ((JReadVoiceEngine.VoiceConfig) -> Unit)? = null,
@@ -50,6 +245,9 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         onGroupDelete: ((String, String?) -> Unit)? = null,
         onGroupReplacePlugin: ((String, String?) -> Unit)? = null,
         onGroupOrganizeTags: ((String, String?) -> Unit)? = null,
+        onGroupAudioParams: ((String, String?) -> Unit)? = null,
+        onGroupMoveUp: ((String, String?) -> Unit)? = null,
+        onGroupMoveDown: ((String, String?) -> Unit)? = null,
         onPluginClick: ((JReadVoiceEngine.VoicePlugin) -> Unit)? = null,
         onPluginEdit: ((JReadVoiceEngine.VoicePlugin) -> Unit)? = null,
         onPluginToggle: ((JReadVoiceEngine.VoicePlugin, Boolean) -> Unit)? = null,
@@ -62,6 +260,8 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         this.onSubGroupToggle = onSubGroupToggle; this.onSubGroupToggleEnabled = onSubGroupToggleEnabled
         this.onGroupRename = onGroupRename; this.onGroupDelete = onGroupDelete
         this.onGroupReplacePlugin = onGroupReplacePlugin; this.onGroupOrganizeTags = onGroupOrganizeTags
+        this.onGroupAudioParams = onGroupAudioParams
+        this.onGroupMoveUp = onGroupMoveUp; this.onGroupMoveDown = onGroupMoveDown
         this.onPluginClick = onPluginClick; this.onPluginEdit = onPluginEdit
         this.onPluginToggle = onPluginToggle; this.onPluginDelete = onPluginDelete
         this.onPluginAudioParams = onPluginAudioParams
@@ -116,11 +316,15 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             ivMore.setOnClickListener {
                 val pm = PopupMenu(itemView.context, ivMore)
                 pm.menu.add("一键整理标签"); pm.menu.add("更换插件")
+                pm.menu.add("音频调节"); pm.menu.add("上移"); pm.menu.add("下移")
                 pm.menu.add("重命名分组"); pm.menu.add("删除分组")
                 pm.setOnMenuItemClickListener { item ->
                     when (item.title) {
                         "一键整理标签" -> onGroupOrganizeTags?.invoke(row.groupName, null)
                         "更换插件" -> onGroupReplacePlugin?.invoke(row.groupName, null)
+                        "音频调节" -> onGroupAudioParams?.invoke(row.groupName, null)
+                        "上移" -> onGroupMoveUp?.invoke(row.groupName, null)
+                        "下移" -> onGroupMoveDown?.invoke(row.groupName, null)
                         "重命名分组" -> onGroupRename?.invoke(row.groupName, null)
                         "删除分组" -> onGroupDelete?.invoke(row.groupName, null)
                     }; true
@@ -143,11 +347,15 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             ivMore.setOnClickListener {
                 val pm = PopupMenu(itemView.context, ivMore)
                 pm.menu.add("一键整理标签"); pm.menu.add("更换插件")
+                pm.menu.add("音频调节"); pm.menu.add("上移"); pm.menu.add("下移")
                 pm.menu.add("重命名"); pm.menu.add("删除")
                 pm.setOnMenuItemClickListener { item ->
                     when (item.title) {
                         "一键整理标签" -> onGroupOrganizeTags?.invoke(row.groupName, row.subGroupName)
                         "更换插件" -> onGroupReplacePlugin?.invoke(row.groupName, row.subGroupName)
+                        "音频调节" -> onGroupAudioParams?.invoke(row.groupName, row.subGroupName)
+                        "上移" -> onGroupMoveUp?.invoke(row.groupName, row.subGroupName)
+                        "下移" -> onGroupMoveDown?.invoke(row.groupName, row.subGroupName)
                         "重命名" -> onGroupRename?.invoke(row.groupName, row.subGroupName)
                         "删除" -> onGroupDelete?.invoke(row.groupName, row.subGroupName)
                     }; true

@@ -43,8 +43,8 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
     private var allPlugins: List<JReadVoiceEngine.VoicePlugin> = emptyList()
     private var allGroups: List<JReadVoiceEngine.VoiceGroup> = emptyList()
     private var pluginsMap: Map<String, JReadVoiceEngine.VoicePlugin> = emptyMap()
-    private var collapsedGroups = mutableSetOf<String>()
-    private var collapsedSubGroups = mutableSetOf<Pair<String, String>>()
+    private var expandedGroups = mutableSetOf<String>()
+    private var expandedSubGroups = mutableSetOf<Pair<String, String>>()
     private var searchQuery = ""
     private var mediaPlayer: MediaPlayer? = null
 
@@ -121,13 +121,13 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
     }
 
     private fun toggleGroup(groupName: String) {
-        if (collapsedGroups.contains(groupName)) collapsedGroups.remove(groupName) else collapsedGroups.add(groupName)
+        if (expandedGroups.contains(groupName)) expandedGroups.remove(groupName) else expandedGroups.add(groupName)
         rebuildRows()
     }
 
     private fun toggleSubGroup(groupName: String, subGroupName: String) {
         val key = Pair(groupName, subGroupName)
-        if (collapsedSubGroups.contains(key)) collapsedSubGroups.remove(key) else collapsedSubGroups.add(key)
+        if (expandedSubGroups.contains(key)) expandedSubGroups.remove(key) else expandedSubGroups.add(key)
         rebuildRows()
     }
 
@@ -193,7 +193,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
         for (groupName in sortedGroupNames) {
             val groupConfigs = filtered.filter { it.groupName.ifBlank { "默认分组" } == groupName }
             // 默认展开所有分组（用户可手动折叠）
-            val groupExpanded = !collapsedGroups.contains(groupName) || searchQuery.isNotEmpty()
+            val groupExpanded = expandedGroups.contains(groupName) || searchQuery.isNotEmpty()
             val allOn = groupConfigs.isNotEmpty() && groupConfigs.all { it.enabled }
             val someOn = groupConfigs.any { it.enabled }
             rows.add(ConfigListRow.GroupHeader(groupName, groupExpanded, groupConfigs.size, allOn, someOn))
@@ -206,7 +206,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                 val sortedSubNames = configSubNames.sorted()
                 for (subGroupName in sortedSubNames) {
                     val subConfigs = groupConfigs.filter { it.subGroupName.ifBlank { "默认" } == subGroupName }
-                    val subExpanded = !collapsedSubGroups.contains(Pair(groupName, subGroupName)) || searchQuery.isNotEmpty()
+                    val subExpanded = expandedSubGroups.contains(Pair(groupName, subGroupName)) || searchQuery.isNotEmpty()
                     val hasMultipleSubs = sortedSubNames.size > 1
                     if (hasMultipleSubs) {
                         val sAllOn = subConfigs.isNotEmpty() && subConfigs.all { it.enabled }
@@ -583,7 +583,15 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                         else -> 0
                     }
                 }
-                toastOnUi("导入了 $count 条"); loadData()
+                toastOnUi("导入了 $count 条")
+                // 在同一个协程中直接加载，不启动新协程
+                allPlugins = withContext(Dispatchers.IO) { JReadVoiceEngine.listPlugins(this@TtsPluginActivity) }
+                pluginsMap = allPlugins.associateBy { it.id }
+                adapter.setPluginsMap(pluginsMap)
+                allGroups = withContext(Dispatchers.IO) { JReadVoiceEngine.listGroups(this@TtsPluginActivity) }
+                allConfigs = withContext(Dispatchers.IO) { JReadVoiceEngine.listConfigs(this@TtsPluginActivity) }
+                rebuildRows()
+                exportEnabledTags()
             } catch (e: Exception) {
                 toastOnUi("导入失败: ${e.message}")
             }

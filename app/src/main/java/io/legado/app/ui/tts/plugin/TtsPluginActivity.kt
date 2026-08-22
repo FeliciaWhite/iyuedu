@@ -312,7 +312,10 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
     }
 
     private fun toggleConfig(config: JReadVoiceEngine.VoiceConfig, enabled: Boolean) {
-        lifecycleScope.launch { withContext(Dispatchers.IO) { JReadVoiceEngine.saveConfig(this@TtsPluginActivity, config.copy(enabled = enabled)) } }
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) { JReadVoiceEngine.saveConfig(this@TtsPluginActivity, config.copy(enabled = enabled)) }
+            loadData()
+        }
     }
 
     private fun setGroupEnabled(groupName: String, subGroupName: String?, enabled: Boolean) {

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/menu_add"
+        android:icon="@drawable/ic_add"
+        android:title="新增"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/menu_init_builtins"
+        android:title="初始化内置配置"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/menu_import"
+        android:title="导入"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/menu_export"
+        android:title="导出"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/menu_list_tags"
+        android:title="查看所有标签"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/menu_help"
+        android:title="帮助"
+        app:showAsAction="never" />
+
+</menu>

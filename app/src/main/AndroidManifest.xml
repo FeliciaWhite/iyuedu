@@ -240,6 +240,16 @@
             android:name=".ui.tts.script.TtsScriptActivity"
             android:launchMode="singleTop"
             android:screenOrientation="behind" />
+        <!-- TTS 引擎插件界面 -->
+        <activity
+            android:name=".ui.tts.plugin.TtsPluginActivity"
+            android:launchMode="singleTop"
+            android:screenOrientation="behind" />
+        <!-- TTS 配置编辑器 -->
+        <activity
+            android:name=".ui.tts.plugin.TtsConfigEditorActivity"
+            android:launchMode="singleTop"
+            android:screenOrientation="behind" />
         <!-- 朗读脚本编辑 -->
         <activity
             android:name=".ui.tts.script.TtsScriptEditActivity"

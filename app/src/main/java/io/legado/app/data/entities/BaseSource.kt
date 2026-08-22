@@ -329,6 +329,7 @@ interface BaseSource : JsExtensions {
             bindings["baseUrl"] = getKey()
             bindings["cookie"] = CookieStore
             bindings["cache"] = CacheManager
+            bindings["tts"] = io.legado.app.help.audiobook.TtsPluginJsBridge()
             bindings.apply(bindingsConfig)
         }
         val sharedScope = getShareScope()

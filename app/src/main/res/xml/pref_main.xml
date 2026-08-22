@@ -33,6 +33,13 @@
         app:iconSpaceReserved="false" />
 
     <io.legado.app.lib.prefs.Preference
+        android:icon="@drawable/ic_cfg_replace"
+        android:key="ttsPluginManage"
+        android:summary="管理 TTS 引擎插件配置，通过标签调用不同音色合成音频"
+        android:title="TTS 引擎插件"
+        app:iconSpaceReserved="false" />
+
+    <io.legado.app.lib.prefs.Preference
         android:icon="@drawable/ic_translate"
         android:key="dictRuleManage"
         android:summary="@string/config_dict_rule"

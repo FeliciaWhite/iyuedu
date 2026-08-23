@@ -1,6 +1,7 @@
 package io.legado.app.help.audiobook
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.util.Log
 import android.util.Base64
 import io.legado.app.constant.AppLog
@@ -37,6 +38,7 @@ object JReadVoiceEngine {
     private const val BUILTIN_VIVI_GROUP_KEY = "性格分组演员池"
     private const val BUILTIN_VIVI_LEGACY_GROUP_KEY = "Vivi的独舞"
     private const val BUILTIN_PLUGIN_BUNDLE_12_KEY = "maoxiang.tts.gj_v35"
+    private const val KEY_BUILTIN_VIVI_DEDUPED = "builtin_vivi_voice_pool_deduped_v1"
     @Volatile
     private var seedingBuiltInConfigs = false
     @Volatile
@@ -151,6 +153,7 @@ object JReadVoiceEngine {
         val appContext = context.applicationContext
         ensureBuiltInSystemVoiceConfigPresets(appContext)
         val prefs = appContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        deduplicateBuiltInVoicePool(appContext, prefs)
         if (prefs.getBoolean(KEY_BUILTIN_VIVI_CONFIG_SEEDED, false)) {
             return
         }
@@ -162,7 +165,7 @@ object JReadVoiceEngine {
         seedingBuiltInConfigs = true
         try {
             resetBuiltInViviVoicePool(appContext)
-            val count = runCatching { importConfigsFromJson(appContext, text) }.getOrDefault(0)
+            val count = runCatching { importConfigsFromJson(appContext, text, useStableId = true) }.getOrDefault(0)
             if (count > 0 || hasConfigGroup(prefs.getString(KEY_CONFIGS, "[]").orEmpty(), BUILTIN_VIVI_GROUP_KEY)) {
                 prefs.edit().putBoolean(KEY_BUILTIN_VIVI_CONFIG_SEEDED, true).apply()
                 AppLog.putDebug("[J阅读声音引擎] 已预置 Vivi 性格音色池：$count 项")
@@ -222,7 +225,7 @@ object JReadVoiceEngine {
         }.getOrNull() ?: return
         seedingBuiltInConfigs = true
         try {
-            val count = runCatching { importConfigsFromJson(appContext, text) }.getOrDefault(0)
+            val count = runCatching { importConfigsFromJson(appContext, text, useStableId = true) }.getOrDefault(0)
             if (count > 0) {
                 prefs.edit().putBoolean(KEY_BUILTIN_SYSTEM_CONFIG_SEEDED, true).apply()
                 AppLog.putDebug("[J阅读声音引擎] 已预置基础发声配置：$count 项")
@@ -230,6 +233,39 @@ object JReadVoiceEngine {
         } finally {
             seedingBuiltInConfigs = false
         }
+    }
+
+    /**
+     * 一次性去重：历史版本由于导入时用随机 UUID 作为 id，导致同一角色被反复追加产生重复。
+     * 这里按稳定 id（内容哈希）分组，每组只保留一条，彻底清除重复数据。
+     */
+    private fun deduplicateBuiltInVoicePool(context: Context, prefs: SharedPreferences) {
+        if (prefs.getBoolean(KEY_BUILTIN_VIVI_DEDUPED, false)) return
+        val configs = listConfigs(context, ensureBuiltIns = false)
+        if (configs.isEmpty()) {
+            prefs.edit().putBoolean(KEY_BUILTIN_VIVI_DEDUPED, true).apply()
+            return
+        }
+        val seen = linkedMapOf<String, VoiceConfig>()
+        val kept = mutableListOf<VoiceConfig>()
+        configs.forEach { config ->
+            val stableId = stableConfigId(config)
+            val existing = seen[stableId]
+            if (existing == null) {
+                seen[stableId] = config
+                kept += config
+            } else {
+                // 保留 enabled 的那条；都未启用则保留原顺序第一条
+                if (config.enabled && !existing.enabled) {
+                    seen[stableId] = config
+                    kept[kept.indexOf(existing)] = config
+                }
+            }
+        }
+        if (kept.size != configs.size) {
+            saveConfigs(context, kept)
+        }
+        prefs.edit().putBoolean(KEY_BUILTIN_VIVI_DEDUPED, true).apply()
     }
 
     private fun hasConfigGroup(raw: String, groupKeyword: String): Boolean {
@@ -1179,7 +1215,7 @@ object JReadVoiceEngine {
         return 0
     }
 
-    fun importConfigsFromJson(context: Context, raw: String): Int {
+    fun importConfigsFromJson(context: Context, raw: String, useStableId: Boolean = false): Int {
         val text = raw.trim()
         if (text.isBlank()) return 0
         val array = when {
@@ -1193,24 +1229,33 @@ object JReadVoiceEngine {
                     ?: JSONArray().put(obj)
             }
         }
-        importGroupConfigsFromJson(context, array)?.let { return it }
-        var count = 0
+        importGroupConfigsFromJson(context, array, useStableId)?.let { return it }
+        val imported = mutableListOf<VoiceConfig>()
         for (index in 0 until array.length()) {
             val obj = array.optJSONObject(index) ?: continue
             val config = parseVoiceConfig(obj) ?: continue
-            saveConfig(
-                context,
-                config.copy(
-                    id = UUID.randomUUID().toString(),
-                    pluginId = resolveImportedConfigPluginId(context, config, obj),
-                )
+            val id = if (useStableId) stableConfigId(config) else UUID.randomUUID().toString()
+            imported += config.copy(
+                id = id,
+                pluginId = resolveImportedConfigPluginId(context, config, obj),
             )
-            count++
         }
-        return count
+        if (imported.isEmpty()) return 0
+        if (useStableId) {
+            // 用稳定 id 去重：删除现有列表中与导入项稳定 id 相同的旧条目，再整体写入（覆盖而非追加）
+            val stableIds = imported.map { it.id }.toSet()
+            val existing = listConfigs(context, ensureBuiltIns = false)
+                .filterNot { it.id in stableIds }
+                .toMutableList()
+            existing += imported
+            saveConfigs(context, existing)
+        } else {
+            imported.forEach { saveConfig(context, it) }
+        }
+        return imported.size
     }
 
-    private fun importGroupConfigsFromJson(context: Context, array: JSONArray): Int? {
+    private fun importGroupConfigsFromJson(context: Context, array: JSONArray, useStableId: Boolean = false): Int? {
         val entries = buildList {
             for (index in 0 until array.length()) {
                 val obj = array.optJSONObject(index) ?: continue
@@ -1266,24 +1311,26 @@ object JReadVoiceEngine {
             val normalized = normalizeVoiceConfigForStorage(
                 config.copy(groupName = config.groupName.trim().ifBlank { "默认分组" })
             )
+            val stableId = if (useStableId) stableConfigId(normalized) else normalized.id
+            val normalizedWithId = normalized.copy(id = stableId)
             upsertGroup(
                 VoiceGroup(
-                    groupName = normalized.groupName,
-                    subGroupName = normalized.subGroupName,
-                    thirdGroupName = normalized.thirdGroupName,
+                    groupName = normalizedWithId.groupName,
+                    subGroupName = normalizedWithId.subGroupName,
+                    thirdGroupName = normalizedWithId.thirdGroupName,
                 )
             )
             val existingIndex = importedConfigs.indexOfFirst {
-                it.id == normalized.id
+                it.id == stableId
             }
             if (existingIndex >= 0) {
-                importedConfigs[existingIndex] = normalized
+                importedConfigs[existingIndex] = normalizedWithId
             } else {
-                importedConfigs += normalized
+                importedConfigs += normalizedWithId
             }
-            if (normalized.enabled) {
+            if (normalizedWithId.enabled) {
                 importedConfigs.replaceAll {
-                    if (it.id != normalized.id && sameVoiceTag(it.voiceTag, normalized.voiceTag)) {
+                    if (it.id != stableId && sameVoiceTag(it.voiceTag, normalizedWithId.voiceTag)) {
                         it.copy(enabled = false)
                     } else {
                         it
@@ -1316,7 +1363,6 @@ object JReadVoiceEngine {
                 val config = parseVoiceConfig(withGroup) ?: continue
                 upsertConfig(
                     config.copy(
-                        id = UUID.randomUUID().toString(),
                         pluginId = resolveImportedConfigPluginId(context, config, withGroup),
                     ),
                 )
@@ -1837,6 +1883,25 @@ object JReadVoiceEngine {
     private fun VoiceGroup.isTimbreVoicePoolGroup(): Boolean {
         return groupName.contains(BUILTIN_VIVI_GROUP_KEY, ignoreCase = true) ||
             groupName.contains(BUILTIN_VIVI_LEGACY_GROUP_KEY, ignoreCase = true)
+    }
+
+    /**
+     * 基于内容生成稳定 id：相同角色（plugin + voiceTag + 分组路径）无论导入多少次都得到同一 id，
+     * 从而在保存时按 id 覆盖而非追加，从根本上去除重复。
+     */
+    private fun stableConfigId(config: VoiceConfig): String {
+        val raw = buildString {
+            append(config.pluginId.trim())
+            append('\u0000')
+            append(config.voiceTag.trim())
+            append('\u0000')
+            append(config.groupName.trim())
+            append('\u0000')
+            append(config.subGroupName.trim())
+            append('\u0000')
+            append(config.thirdGroupName.trim())
+        }
+        return "vc_" + raw.hashCode().let { if (it == Int.MIN_VALUE) 0 else it }.toString(36)
     }
 
     private fun normalizeVoiceConfigForStorage(config: VoiceConfig): VoiceConfig {

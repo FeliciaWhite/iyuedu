@@ -590,6 +590,13 @@ object JReadVoicePluginRuntime {
             .replace("new java.lang.Runnable(", "new __jreadRunnable(")
             // 部分插件用 new Runnable(...)（无 java.lang. 前缀）
             .replace("new Runnable(", "new __jreadRunnable(")
+            // 把 new android.text.TextWatcher({ ... }) 替换为授权版 new __jreadTextWatcher({ ... })，
+            // 否则 editText.addTextChangedListener(TextWatcher) 在输入法 commitText 时经 Rhino
+            // InterfaceAdapter 调 JS 的 beforeTextChanged/onTextChanged/afterTextChanged 会抛
+            // "Not allow run script in unauthorized way"。__jreadTextWatcher 内部有授权保护。
+            .replace("new android.text.TextWatcher(", "new __jreadTextWatcher(")
+            // 部分插件用 new TextWatcher(...)（无 android.text. 前缀）
+            .replace("new TextWatcher(", "new __jreadTextWatcher(")
     }
 
     fun installPluginCompatShims(scope: Scriptable, context: Context? = null) {
@@ -675,6 +682,7 @@ object JReadVoicePluginRuntime {
             // 但 run() 内允许脚本运行，避免 view.post(Runnable) 触发
             // "Not allow run script in unauthorized way"。
             "__jreadRunnable" to "Packages.io.legado.app.help.audiobook.plugin.JRunnable",
+            "__jreadTextWatcher" to "Packages.io.legado.app.help.audiobook.plugin.JTextWatcher",
         )
         for ((name, pkg) in shortNames) {
             runCatching {

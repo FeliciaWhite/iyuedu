@@ -1,5 +1,6 @@
 package io.legado.app.ui.tts.plugin
 
+import android.content.Context
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.os.Bundle
@@ -44,6 +45,8 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         const val EXTRA_CONFIG_ID = "configId"
         const val EXTRA_IS_NEW = "isNew"
         private const val MENU_SAVE = 1
+        private const val KEY_PREVIEW_TEXT = "tts_preview_text"
+        private const val DEFAULT_PREVIEW_TEXT = "你好呀，你吃饭了吗？"
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -58,6 +61,21 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         binding.btnGenerateTag.setOnClickListener { generateTimbreTag() }
         binding.ivTagSearch.setOnClickListener { showTagSearchDialog() }
         binding.btnPreview.setOnClickListener { previewConfig() }
+        // 试听文本持久化：打开时读取已保存内容，无则使用默认值
+        binding.etPreviewText.setText(
+            getPreferences(Context.MODE_PRIVATE)
+                .getString(KEY_PREVIEW_TEXT, DEFAULT_PREVIEW_TEXT)
+                .orEmpty()
+        )
+        binding.etPreviewText.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+            override fun afterTextChanged(s: android.text.Editable?) {
+                getPreferences(Context.MODE_PRIVATE).edit()
+                    .putString(KEY_PREVIEW_TEXT, s?.toString().orEmpty())
+                    .apply()
+            }
+        })
         binding.ivGroupPicker.setOnClickListener { showGroupPicker() }
         binding.ivSubGroupPicker.setOnClickListener { showSubGroupPicker() }
         // 旧格式不需要风格，隐藏

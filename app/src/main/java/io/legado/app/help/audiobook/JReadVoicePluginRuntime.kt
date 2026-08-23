@@ -43,6 +43,7 @@ import org.mozilla.javascript.Undefined
 import org.mozilla.javascript.typedarrays.NativeArrayBuffer
 import org.mozilla.javascript.typedarrays.NativeTypedArrayView
 import org.mozilla.javascript.typedarrays.NativeUint8Array
+import io.legado.app.help.audiobook.plugin.JRunnable
 import io.legado.app.utils.MD5Utils
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -679,6 +680,15 @@ object JReadVoicePluginRuntime {
             // 会通过 Rhino InterfaceAdapter 调用 JS 函数，但没有 Context.enter()，导致崩溃。
             // JSwitch 内部有 Context.enter()/exit() 保护。
             .replace("new android.widget.Switch(", "new JSwitch(")
+            // 把 new Switch(ctx)（无 android.widget. 前缀）也替换为 new JSwitch(ctx)，
+            // 否则会走到真实 android.widget.Switch 同样崩溃。
+            .replace("new Switch(", "new JSwitch(")
+            // 把 new java.lang.Runnable({ run: ... }) 替换为授权版 new __jreadRunnable({ run: ... })，
+            // 避免 view.post(Runnable) 在主线程经 Rhino InterfaceAdapter 调 JS 时抛
+            // "Not allow run script in unauthorized way"。
+            .replace("new java.lang.Runnable(", "new __jreadRunnable(")
+            // 部分插件用 new Runnable(...)（无 java.lang. 前缀）
+            .replace("new Runnable(", "new __jreadRunnable(")
     }
 
     fun installPluginCompatShims(scope: Scriptable, context: Context? = null) {
@@ -760,6 +770,10 @@ object JReadVoicePluginRuntime {
             "ScrollView" to "Packages.android.widget.ScrollView",
             "ImageView" to "Packages.android.widget.ImageView",
             "Toast" to "Packages.android.widget.Toast",
+            // 授权版 Runnable 构造器，等价于 new java.lang.Runnable(...)，
+            // 但 run() 内允许脚本运行，避免 view.post(Runnable) 触发
+            // "Not allow run script in unauthorized way"。
+            "__jreadRunnable" to "Packages.io.legado.app.help.audiobook.plugin.JRunnable",
         )
         for ((name, pkg) in shortNames) {
             runCatching {
@@ -861,7 +875,21 @@ object JReadVoicePluginRuntime {
                         """.trimIndent(),
                         scope
                     )
-                    Log.d(TAG, "loadPluginEditorUI onLoadUI done: plugin=${plugin.name}, childCount=${container.childCount}")
+                    Log.d(TAG, "loadPluginEditorUI onLoadUI done: plugin=${plugin.name}, containerChild=${container.childCount}")
+                    // 插件在 onLoadUI 中可能通过 "ttsrv.root = b" 把根容器重定向到自建的 LinearLayout，
+                    // 而 container(uiRoot) 始终为空。这里把插件最终设置的 ttsrv.root 挂到 container 上渲染，
+                    // 保证无论是往 ttsrv.root(container) 加还是往自建根 b 加，UI 都能显示出来。
+                    val ttsrvObj = ScriptableObject.getProperty(scope, "ttsrv")
+                    val pluginRoot = if (ttsrvObj is Scriptable) {
+                        ScriptableObject.getProperty(ttsrvObj, "root") as? View
+                    } else null
+                    if (pluginRoot != null && pluginRoot !== container && pluginRoot.parent == null) {
+                        container.addView(pluginRoot, LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                        ))
+                        Log.d(TAG, "loadPluginEditorUI attached plugin root to container: childCount=${(pluginRoot as? ViewGroup)?.childCount}")
+                    }
                     container
                 }
             }.getOrElse {
@@ -1428,6 +1456,9 @@ object JReadVoicePluginRuntime {
         fun httpGetString(url: Any?, headers: Any? = null): String {
             return httpGet(url, headers).body().string()
         }
+
+        /** 返回宿主 Android Context，供插件创建 SharedPreferences 等。 */
+        fun getContext(): Context = context
 
         @JvmOverloads
         fun httpGetBytes(url: Any?, headers: Any? = null): ByteArray {

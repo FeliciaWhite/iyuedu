@@ -146,7 +146,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
             onGroupAudioParams = { groupName, subGroupName -> showGroupAudioParamsDialog(groupName, subGroupName) },
             onGroupMoveUp = { groupName, subGroupName -> moveGroup(groupName, subGroupName, up = true) },
             onGroupMoveDown = { groupName, subGroupName -> moveGroup(groupName, subGroupName, up = false) },
-            onPluginClick = { plugin -> showPluginEditor(plugin) },
+            onPluginClick = { plugin -> showPluginOptions(plugin) },
             onPluginEdit = { plugin -> showPluginEditor(plugin) },
             onPluginToggle = { plugin, enabled -> togglePlugin(plugin, enabled) },
             onPluginDelete = { plugin -> deletePlugin(plugin) },
@@ -605,6 +605,41 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
             }
             cancelButton()
         }
+    }
+
+    private fun showPluginOptions(plugin: JReadVoiceEngine.VoicePlugin) {
+        val options = arrayOf("编辑插件", "音频参数", "清空数据", "删除插件")
+        android.app.AlertDialog.Builder(this)
+            .setTitle(plugin.name)
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> showPluginEditor(plugin)
+                    1 -> showPluginAudioParams(plugin)
+                    2 -> clearPluginData(plugin)
+                    3 -> deletePlugin(plugin)
+                }
+            }.show()
+    }
+
+    private fun clearPluginData(plugin: JReadVoiceEngine.VoicePlugin) {
+        android.app.AlertDialog.Builder(this)
+            .setTitle("清空数据")
+            .setMessage("确定清空 ${plugin.name} 的所有缓存数据？")
+            .setPositiveButton("清空") { _, _ ->
+                lifecycleScope.launch {
+                    withContext(Dispatchers.IO) {
+                        val storageId = plugin.pluginId.ifBlank { plugin.id }
+                        val dir = java.io.File(this@TtsPluginActivity.filesDir, "jread_voice_engine/plugin_files/$storageId")
+                        if (dir.exists()) {
+                            dir.listFiles()?.forEach { it.delete() }
+                            dir.delete()
+                        }
+                    }
+                    toastOnUi("已清空 ${plugin.name} 的数据")
+                }
+            }
+            .setNegativeButton("取消", null)
+            .show()
     }
 
     private fun showPluginEditor(plugin: JReadVoiceEngine.VoicePlugin?) {

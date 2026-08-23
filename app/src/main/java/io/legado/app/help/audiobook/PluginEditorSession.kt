@@ -85,30 +85,15 @@ class PluginEditorSession(
             }
 
             // onLoadData
-            runCatching {
+            val onLoadDataResult = runCatching {
                 RhinoScriptEngine.eval(
                     "if (typeof $uiName.onLoadData === 'function') { $uiName.onLoadData(); }",
                     sc
                 )
-            }.onFailure {
+            }
+            onLoadDataResult.onFailure {
                 Log.w(TAG, "init onLoadData failed: plugin=${plugin.name}", it)
             }
-
-            // 验证 onLoadData 是否成功加载了数据
-            val voicesCheck = runCatching {
-                RhinoScriptEngine.eval(
-                    """(function() {
-                        try {
-                            if (typeof voices !== 'undefined' && voices) {
-                                return 'voices loaded: ' + (voices.length || Object.keys(voices).length || 'unknown') + ' items';
-                            }
-                            return 'voices not defined or empty';
-                        } catch(e) { return 'voices check error: ' + e; }
-                    })();""",
-                    sc
-                )
-            }.getOrDefault("check failed")
-            Log.d(TAG, "init onLoadData result: plugin=${plugin.name}, $voicesCheck")
 
             // onLoadUI — 主线程
             val cont = JReadVoicePluginRuntime.onLoadUI(sc, uiName, context)
@@ -142,8 +127,13 @@ class PluginEditorSession(
                 ScriptableObject.putProperty(sc, "__jreadVoiceId", voice)
                 RhinoScriptEngine.eval(
                     """
-                    if (typeof $uiName.onVoiceChanged === 'function') {
-                        $uiName.onVoiceChanged(String(__jreadVoiceLocale), String(__jreadVoiceId));
+                    if (typeof $uiName !== 'undefined') {
+                        if (typeof $uiName.getVoices === 'function') {
+                            $uiName.getVoices(String(__jreadVoiceLocale));
+                        }
+                        if (typeof $uiName.onVoiceChanged === 'function') {
+                            $uiName.onVoiceChanged(String(__jreadVoiceLocale), String(__jreadVoiceId));
+                        }
                     }
                     """.trimIndent(),
                     sc

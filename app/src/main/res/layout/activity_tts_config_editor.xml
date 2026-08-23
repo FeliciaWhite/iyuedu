@@ -65,29 +65,26 @@
                         android:text="AI标签生成器" android:textSize="13sp" android:textStyle="bold"
                         android:textColor="@color/primaryText" android:layout_marginTop="4dp" android:layout_marginBottom="6dp" />
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:orientation="horizontal" android:layout_marginBottom="4dp">
+                        android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="4dp">
                         <Spinner android:id="@+id/spinner_gender" android:layout_width="0dp"
                             android:layout_height="wrap_content" android:layout_weight="1" />
                         <Spinner android:id="@+id/spinner_age" android:layout_width="0dp"
-                            android:layout_height="wrap_content" android:layout_weight="1" />
+                            android:layout_height="wrap_content" android:layout_weight="1"
+                            android:layout_marginStart="8dp" />
+                        <EditText android:id="@+id/et_tag_number" android:layout_width="56dp"
+                            android:layout_height="wrap_content" android:layout_marginStart="8dp"
+                            android:hint="01"
+                            android:textSize="13sp" android:inputType="number" />
+                        <Button android:id="@+id/btn_generate_tag" android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" android:layout_marginStart="8dp"
+                            android:text="生成" android:textSize="12sp"
+                            android:minWidth="0dp" android:minHeight="0dp" android:padding="8dp" />
                     </LinearLayout>
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="4dp">
+                        android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="8dp">
                         <EditText android:id="@+id/et_style" android:layout_width="0dp"
                             android:layout_height="wrap_content" android:layout_weight="1"
                             android:hint="风格 (如: 通用)" android:textSize="13sp" />
-                        <EditText android:id="@+id/et_tag_number" android:layout_width="60dp"
-                            android:layout_height="wrap_content" android:hint="01"
-                            android:textSize="13sp" android:inputType="number" />
-                    </LinearLayout>
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:orientation="horizontal" android:layout_marginBottom="8dp">
-                        <Button android:id="@+id/btn_generate_tag" android:layout_width="wrap_content"
-                            android:layout_height="wrap_content" android:text="生成" android:textSize="12sp"
-                            android:minWidth="0dp" android:minHeight="0dp" android:padding="8dp" />
-                        <Button android:id="@+id/btn_recognize_tag" android:layout_width="wrap_content"
-                            android:layout_height="wrap_content" android:text="识别当前" android:textSize="12sp"
-                            android:minWidth="0dp" android:minHeight="0dp" android:padding="8dp" android:layout_marginStart="8dp" />
                     </LinearLayout>
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:text="一级分组" android:textSize="12sp" android:textColor="@color/secondaryText" />

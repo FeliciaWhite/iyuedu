@@ -3,9 +3,15 @@ package io.legado.app.ui.tts.plugin
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.os.Bundle
+import android.text.InputType
+import android.text.TextWatcher
+import android.util.TypedValue
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ListView
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.lifecycle.lifecycleScope
@@ -51,7 +57,6 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         binding.spinnerGender.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("男", "女"))
         binding.spinnerAge.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("童", "少年", "青年", "中年", "老年"))
         binding.btnGenerateTag.setOnClickListener { generateTimbreTag() }
-        binding.btnRecognizeTag.setOnClickListener { recognizeTimbreTag() }
         binding.ivTagSearch.setOnClickListener { showTagSearchDialog() }
         binding.btnPreview.setOnClickListener { previewConfig() }
         binding.ivGroupPicker.setOnClickListener { showGroupPicker() }
@@ -148,7 +153,6 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
             binding.spinnerPlugin.setSelection(pluginIdx + 1)
             // onPluginSelected 会被 setSelection 异步触发，不需要再手动调用 renderPluginUi
         }
-        recognizeTimbreTag()
     }
 
     private fun onPluginSelected(position: Int) {
@@ -357,33 +361,52 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         toastOnUi("已生成标签: $tag")
     }
 
-    private fun recognizeTimbreTag() {
-        val tag = binding.etVoiceTag.text.toString().trim()
-        // 旧格式: 男青年01、少女01、男童01 等
-        val match = Regex("^(男童|女童|少年|少女|男青年|女青年|男中年|女中年|男老年|女老年|特殊男|特殊女|男主|女主)(\\d{1,3})?$").matchEntire(tag)
-        if (match != null) {
-            val shortAge = match.groupValues[1]
-            val (gender, age) = when {
-                shortAge.startsWith("男") -> "男" to shortAge.removePrefix("男")
-                shortAge.startsWith("女") -> "女" to shortAge.removePrefix("女")
-                shortAge == "少年" -> "男" to "少年"
-                shortAge == "少女" -> "女" to "少年"
-                else -> "男" to "青年"
-            }
-            binding.spinnerGender.setSelection(listOf("男", "女").indexOf(gender).coerceAtLeast(0))
-            binding.spinnerAge.setSelection(listOf("童", "少年", "青年", "中年", "老年").indexOf(age).coerceAtLeast(0))
-            binding.etTagNumber.setText(match.groupValues[2].ifBlank { "01" })
-        }
-    }
-
     private fun showTagSearchDialog() {
         lifecycleScope.launch {
-            val tags = withContext(Dispatchers.IO) { JReadVoiceEngine.listConfigs(this@TtsConfigEditorActivity).map { it.voiceTag }.distinct().sorted() }
-            if (tags.isEmpty()) { toastOnUi("暂无可用标签"); return@launch }
-            android.app.AlertDialog.Builder(this@TtsConfigEditorActivity)
-                .setTitle("选择标签 (${tags.size})")
-                .setItems(tags.toTypedArray()) { _, which -> binding.etVoiceTag.setText(tags[which]); recognizeTimbreTag() }
+            val allTags = withContext(Dispatchers.IO) { JReadVoiceEngine.listConfigs(this@TtsConfigEditorActivity).map { it.voiceTag }.distinct().sorted() }
+            if (allTags.isEmpty()) { toastOnUi("暂无可用标签"); return@launch }
+            val context = this@TtsConfigEditorActivity
+            val container = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(32, 24, 32, 8)
+            }
+            val searchInput = EditText(context).apply {
+                hint = "搜索标签"
+                inputType = android.text.InputType.TYPE_CLASS_TEXT
+                setSingleLine(true)
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14f)
+            }
+            val listView = ListView(context).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    resources.displayMetrics.heightPixels / 2,
+                )
+            }
+            container.addView(searchInput)
+            container.addView(listView)
+
+            val adapter = android.widget.ArrayAdapter(context, android.R.layout.simple_list_item_1, allTags)
+            listView.adapter = adapter
+
+            val dialog = android.app.AlertDialog.Builder(context)
+                .setTitle("选择标签 (${allTags.size})")
+                .setView(container)
+                .setNegativeButton("取消", null)
                 .show()
+
+            listView.setOnItemClickListener { _, _, position, _ ->
+                val tag = adapter.getItem(position) ?: return@setOnItemClickListener
+                binding.etVoiceTag.setText(tag)
+                dialog.dismiss()
+            }
+
+            searchInput.addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                    adapter.filter.filter(s)
+                }
+                override fun afterTextChanged(s: android.text.Editable?) {}
+            })
         }
     }
 

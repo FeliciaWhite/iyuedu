@@ -4,9 +4,18 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
-    android:padding="10dp"
+    android:paddingStart="10dp"
+    android:paddingTop="6dp"
+    android:paddingEnd="4dp"
+    android:paddingBottom="6dp"
     android:gravity="center_vertical"
     android:background="?attr/selectableItemBackground">
+
+    <CheckBox
+        android:id="@+id/cb_enabled"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:padding="0dp" />
 
     <LinearLayout
         android:layout_width="0dp"
@@ -14,6 +23,7 @@
         android:layout_weight="1"
         android:orientation="vertical">
 
+        <!-- 第一行：名称(左) + 标签(右上) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -21,16 +31,55 @@
             android:gravity="center_vertical">
 
             <TextView
-                android:id="@+id/tv_tag"
+                android:id="@+id/tv_name"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
+                android:layout_marginEnd="6dp"
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:textColor="@color/primaryText"
                 android:maxLines="1"
-                android:ellipsize="end"
-                tools:text="旁白" />
+                android:ellipsize="none"
+                tools:text="度沁遥｜知性女声｜大模型多情感" />
+
+            <TextView
+                android:id="@+id/tv_tag"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingHorizontal="6dp"
+                android:paddingVertical="2dp"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:textColor="@color/secondaryText"
+                android:background="@drawable/bg_tag_outline"
+                android:maxLines="1"
+                android:ellipsize="none"
+                tools:text="女中年02" />
+        </LinearLayout>
+
+        <!-- 第二行：声线 + 采样率 + 参数 -->
+        <TextView
+            android:id="@+id/tv_params"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textSize="11sp"
+            android:textColor="@color/secondaryText"
+            android:maxLines="2"
+            android:ellipsize="none"
+            tools:text="v4197 | 48000hz | 音量:1.0 | 语速:1.0 | 音高:1.0" />
+
+        <!-- 第三行：插件名(右下) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
 
             <TextView
                 android:id="@+id/tv_plugin_name"
@@ -38,29 +87,10 @@
                 android:layout_height="wrap_content"
                 android:textSize="11sp"
                 android:textColor="@color/secondaryText"
-                android:layout_marginStart="6dp"
-                tools:text="薇薇" />
+                android:maxLines="1"
+                android:ellipsize="none"
+                tools:text="百度云端音色池" />
         </LinearLayout>
-
-        <TextView
-            android:id="@+id/tv_name"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="1dp"
-            android:textSize="12sp"
-            android:textColor="@color/secondaryText"
-            android:maxLines="1"
-            android:ellipsize="end"
-            tools:text="默认旁白" />
-
-        <TextView
-            android:id="@+id/tv_params"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="1dp"
-            android:textSize="10sp"
-            android:textColor="@color/secondaryText"
-            tools:text="采样率:24000hz | 音量:1.0 | 语速:1.0 | 音高:1.0" />
 
     </LinearLayout>
 
@@ -81,11 +111,5 @@
         android:src="@drawable/ic_more"
         android:background="?attr/selectableItemBackgroundBorderless"
         android:contentDescription="更多" />
-
-    <CheckBox
-        android:id="@+id/cb_enabled"
-        android:layout_width="28dp"
-        android:layout_height="28dp"
-        android:padding="0dp" />
 
 </LinearLayout>

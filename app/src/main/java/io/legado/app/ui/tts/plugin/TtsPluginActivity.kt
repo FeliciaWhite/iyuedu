@@ -190,30 +190,26 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                     rebuildPluginRows()
                 }
             }
-            // 自动导出启用的标签到 fayinren.json
-            exportEnabledTags()
+            // 注意：不再在 loadData 同步路径写 fayinren.json（避免每次进入/刷新都写文件造成卡顿）
+            // 写文件改为在启用/禁用/导入等操作后由 refreshListLight() 异步触发
         }
     }
 
-    private fun exportEnabledTags() {
-        lifecycleScope.launch {
-            withContext(Dispatchers.IO) {
-                try {
-                    val configs = JReadVoiceEngine.listConfigs(this@TtsPluginActivity)
-                    val tags = configs.filter { it.enabled }
-                        .map { it.voiceTag }
-                        .filter { it.isNotBlank() }
-                        .distinct()
-                        .sorted()
-                    val json = org.json.JSONArray(tags).toString(2)
-                    val dir = java.io.File("/storage/emulated/0/Download/chajian/mingwuyan")
-                    if (!dir.exists()) dir.mkdirs()
-                    val file = java.io.File(dir, "fayinren.json")
-                    file.writeText(json)
-                } catch (e: Exception) {
-                    // 忽略写入错误（可能没有存储权限）
-                }
-            }
+    private fun exportEnabledTagsNow() {
+        try {
+            // 直接用内存中的最新配置，不再读盘全量解析，文件很小直接覆盖写
+            val tags = allConfigs.filter { it.enabled }
+                .map { it.voiceTag }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .sorted()
+            val json = org.json.JSONArray(tags).toString(2)
+            val dir = java.io.File("/storage/emulated/0/Download/chajian/mingwuyan")
+            if (!dir.exists()) dir.mkdirs()
+            val file = java.io.File(dir, "fayinren.json")
+            file.writeText(json)
+        } catch (e: Exception) {
+            // 忽略写入错误（可能没有存储权限）
         }
     }
 
@@ -363,14 +359,19 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
     private fun deleteConfig(config: JReadVoiceEngine.VoiceConfig) {
         lifecycleScope.launch {
             withContext(Dispatchers.IO) { JReadVoiceEngine.deleteConfig(this@TtsPluginActivity, config.id) }
-            toastOnUi("已删除: ${config.voiceTag}"); loadData()
+            // 仅重读配置列表并轻量刷新，不 loadData() 全量重载
+            allConfigs = JReadVoiceEngine.listConfigs(this@TtsPluginActivity)
+            toastOnUi("已删除: ${config.voiceTag}")
+            refreshListLight()
         }
     }
 
     private fun toggleConfig(config: JReadVoiceEngine.VoiceConfig, enabled: Boolean) {
         lifecycleScope.launch {
             withContext(Dispatchers.IO) { JReadVoiceEngine.saveConfig(this@TtsPluginActivity, config.copy(enabled = enabled)) }
-            loadData()
+            // 仅内存更新 + 局部重排，避免 loadData() 全量读盘/解析/写文件造成的卡顿
+            allConfigs = allConfigs.map { if (it.id == config.id) it.copy(enabled = enabled) else it }
+            refreshListLight()
         }
     }
 
@@ -383,8 +384,42 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                     (subGroupName == null || c.subGroupName.ifBlank { "默认" } == subGroupName)
                 }.map { it.id }
                 JReadVoiceEngine.setConfigsEnabled(this@TtsPluginActivity, ids, enabled)
+                // 同步内存，避免 loadData() 全量重载
+                val idSet = ids.toSet()
+                allConfigs = allConfigs.map { if (idSet.contains(it.id)) it.copy(enabled = enabled) else it }
             }
-            loadData()
+            refreshListLight()
+        }
+    }
+
+    /**
+     * 轻量刷新：内存已是最新，只重排可见列表并异步写 fayinren.json，
+     * 不再走 loadData()（不读盘、不解析整表、不做内置预设/迁移）。
+     */
+    private fun refreshListLight() {
+        rebuildRows()
+        scheduleExportEnabledTags()
+    }
+
+    // 后台写 fayinren.json 的串行标记：多次调用只保证"最终基于最新内存写一次"，避免快速连点堆积 I/O
+    @Volatile
+    private var exportTagsPending = false
+
+    private fun scheduleExportEnabledTags() {
+        if (exportTagsPending) return
+        exportTagsPending = true
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                try {
+                    do {
+                        exportTagsPending = false
+                        exportEnabledTagsNow()
+                        // 若期间又来了新请求，再写一次（基于最新内存），保证最终一致
+                    } while (exportTagsPending)
+                } catch (e: Exception) {
+                    exportTagsPending = false
+                }
+            }
         }
     }
 
@@ -839,7 +874,15 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                         else -> 0
                     }
                 }
-                toastOnUi("导入了 $count 条"); loadData()
+                if (count > 0) {
+                    // 仅重读配置/插件列表（不全量 loadData），再局部刷新，避免卡顿
+                    allConfigs = JReadVoiceEngine.listConfigs(this@TtsPluginActivity)
+                    allPlugins = JReadVoiceEngine.listPlugins(this@TtsPluginActivity)
+                    pluginsMap = allPlugins.associateBy { it.id }
+                    adapter.setPluginsMap(pluginsMap)
+                }
+                toastOnUi("导入了 $count 条")
+                refreshListLight()
             } catch (e: Exception) {
                 toastOnUi("导入失败: ${e.message}")
             }

@@ -270,9 +270,8 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
     private fun onVoiceSelected(position: Int) {
         if (voiceOptions.isEmpty() || position >= voiceOptions.size) return
         val voice = voiceOptions[position]
-        if (binding.etDisplayName.text.isBlank()) {
-            binding.etDisplayName.setText(voice.name.ifBlank { voice.id })
-        }
+        // 切换发音人时强制同步显示名称；之后用户可随意手改，直到下次切换发言人才再覆盖
+        binding.etDisplayName.setText(voice.name.ifBlank { voice.id })
         notifyVoiceChanged(voice.id)
     }
 

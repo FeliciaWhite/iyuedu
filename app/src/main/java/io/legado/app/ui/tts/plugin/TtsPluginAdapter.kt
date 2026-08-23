@@ -375,11 +375,23 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         private val ivMore: ImageView = itemView.findViewById(R.id.iv_more)
 
         fun bind(config: JReadVoiceEngine.VoiceConfig, indentLevel: Int = 0) {
-            tvTag.text = config.voiceTag
+            // 标签：只显示真正的标签字段 voiceTag；为空则隐藏标签行，不用其它字段冒充
+            if (config.voiceTag.isBlank()) {
+                tvTag.visibility = View.GONE
+            } else {
+                tvTag.visibility = View.VISIBLE
+                tvTag.text = config.voiceTag
+            }
             tvName.text = config.displayName.ifBlank { config.voice }
             val plugin = pluginsMap[config.pluginId]
             tvPluginName.text = if (plugin != null) displayNameForConfigCard(plugin) else ""
-            tvParams.text = "采样率:24000hz | 音量:${"%.1f".format(config.volume)} | 语速:${"%.1f".format(config.speed)} | 音高:${"%.1f".format(config.pitch)}"
+            // 采样率从 data.sampleRate 读取（导入配置多为字符串），缺省回退 24000
+            val sampleRate = runCatching {
+                val obj = org.json.JSONObject(config.dataJson)
+                val raw = obj.optString("sampleRate").ifBlank { obj.optInt("sampleRate", 24000).toString() }
+                raw.toIntOrNull() ?: 24000
+            }.getOrDefault(24000)
+            tvParams.text = "${config.voice} | ${sampleRate}hz | 音量:${"%.1f".format(config.volume)} | 语速:${"%.1f".format(config.speed)} | 音高:${"%.1f".format(config.pitch)}"
             itemView.setPadding(dpToPx(itemView.context, indentLevel * 24), itemView.paddingTop, itemView.paddingRight, itemView.paddingBottom)
             cbEnabled.setOnCheckedChangeListener(null)
             cbEnabled.isChecked = config.enabled

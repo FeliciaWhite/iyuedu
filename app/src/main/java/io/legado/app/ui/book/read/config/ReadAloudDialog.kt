@@ -384,6 +384,8 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
         initData()
         initEvent()
         initSwipeToDismiss()
+        // 根据系统导航栏高度动态调整底部 padding，避免三键导航遮挡按钮
+        binding.contentPanel.applyNavigationBarPadding(withInitialPadding = true)
     }
 
     /**

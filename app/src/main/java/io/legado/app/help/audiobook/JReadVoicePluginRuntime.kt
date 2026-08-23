@@ -1,8 +1,22 @@
 package io.legado.app.help.audiobook
 
 import android.content.Context
+import android.text.InputType
 import android.util.Log
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
 import android.webkit.WebSettings
+import android.widget.ArrayAdapter
+import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.SeekBar
+import android.widget.Spinner
+import android.widget.TextView
+import kotlin.math.pow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.annotation.Keep
 import com.script.ScriptBindings
 import com.script.rhino.RhinoScriptEngine
@@ -99,9 +113,9 @@ object JReadVoicePluginRuntime {
         }
         val scope = RhinoScriptEngine.getRuntimeScope(bindings)
         installPluginGlobals(scope, websocketFactory)
-        installPluginCompatShims(scope)
+        installPluginCompatShims(scope, context)
         RhinoScriptEngine.eval(preparePluginCode(plugin.code), scope)
-        installPluginCompatShims(scope)
+        installPluginCompatShims(scope, context)
         if (ScriptableObject.getProperty(scope, "PluginJS") !is ScriptableObject) {
             error("J.TTS 插件缺少 PluginJS 对象")
         }
@@ -235,9 +249,9 @@ object JReadVoicePluginRuntime {
         }
         val scope = RhinoScriptEngine.getRuntimeScope(bindings)
         installPluginGlobals(scope, WebsocketFactory(context))
-        installPluginCompatShims(scope)
+        installPluginCompatShims(scope, context)
         RhinoScriptEngine.eval(preparePluginCode(plugin.code), scope)
-        installPluginCompatShims(scope)
+        installPluginCompatShims(scope, context)
         val uiObjectName = when {
             ScriptableObject.getProperty(scope, "EditorJS") is ScriptableObject -> "EditorJS"
             ScriptableObject.getProperty(scope, "PluginJS") is ScriptableObject -> "PluginJS"
@@ -300,9 +314,9 @@ object JReadVoicePluginRuntime {
         }
         val scope = RhinoScriptEngine.getRuntimeScope(bindings)
         installPluginGlobals(scope, WebsocketFactory(context))
-        installPluginCompatShims(scope)
+        installPluginCompatShims(scope, context)
         RhinoScriptEngine.eval(preparePluginCode(plugin.code), scope)
-        installPluginCompatShims(scope)
+        installPluginCompatShims(scope, context)
         val uiObjectName = when {
             ScriptableObject.getProperty(scope, "EditorJS") is ScriptableObject -> "EditorJS"
             ScriptableObject.getProperty(scope, "PluginJS") is ScriptableObject -> "PluginJS"
@@ -443,9 +457,9 @@ object JReadVoicePluginRuntime {
             }
             val scope = RhinoScriptEngine.getRuntimeScope(bindings)
             installPluginGlobals(scope, WebsocketFactory(context))
-            installPluginCompatShims(scope)
+            installPluginCompatShims(scope, context)
             RhinoScriptEngine.eval(preparePluginCode(plugin.code), scope)
-            installPluginCompatShims(scope)
+            installPluginCompatShims(scope, context)
             val uiObjectName = when {
                 ScriptableObject.getProperty(scope, "EditorJS") is ScriptableObject -> "EditorJS"
                 ScriptableObject.getProperty(scope, "PluginJS") is ScriptableObject -> "PluginJS"
@@ -494,9 +508,9 @@ object JReadVoicePluginRuntime {
             }
             val scope = RhinoScriptEngine.getRuntimeScope(bindings)
             installPluginGlobals(scope, WebsocketFactory(context))
-            installPluginCompatShims(scope)
+            installPluginCompatShims(scope, context)
             RhinoScriptEngine.eval(preparePluginCode(plugin.code), scope)
-            installPluginCompatShims(scope)
+            installPluginCompatShims(scope, context)
             val uiObjectName = when {
                 ScriptableObject.getProperty(scope, "EditorJS") is ScriptableObject -> "EditorJS"
                 ScriptableObject.getProperty(scope, "PluginJS") is ScriptableObject -> "PluginJS"
@@ -550,26 +564,38 @@ object JReadVoicePluginRuntime {
         scope: Scriptable,
         uiObjectName: String,
     ) {
-        RhinoScriptEngine.eval(
-            """
-            if (typeof $uiObjectName.onLoadData === 'function') {
-                $uiObjectName.onLoadData();
-            }
-            if (typeof $uiObjectName.onLoadUI === 'function') {
-                if (typeof __jreadUiContainer === 'undefined') {
-                    var __jreadUiContainer = __jreadCreateLinearLayout(null);
+        // onLoadData 和 onLoadUI 分开执行，onLoadUI 失败不影响 onLoadData 加载的数据。
+        runCatching {
+            RhinoScriptEngine.eval(
+                """
+                if (typeof $uiObjectName.onLoadData === 'function') {
+                    $uiObjectName.onLoadData();
                 }
-                if (typeof __jreadUiContext === 'undefined') {
-                    var __jreadUiContext = __jreadCreateContext();
+                """.trimIndent(),
+                scope
+            )
+        }.onFailure {
+            Log.w(TAG, "loadEditorRuntime onLoadData failed", it)
+        }
+        runCatching {
+            RhinoScriptEngine.eval(
+                """
+                if (typeof $uiObjectName.onLoadUI === 'function') {
+                    // 引导阶段不渲染真实 UI，只让插件初始化内部状态。
+                    // 使用一个空对象作为容器，避免创建真实 View。
+                    var __jreadUiContainer = { addView: function(v) { return v; }, removeAllViews: function() {}, setOrientation: function() {}, setVisibility: function() {}, setDescendantFocusability: function() {}, setPadding: function() {} };
+                    var __jreadUiContext = __jreadCtx;
+                    $uiObjectName.onLoadUI(__jreadUiContext, __jreadUiContainer);
                 }
-                $uiObjectName.onLoadUI(__jreadUiContext, __jreadUiContainer);
-            }
-            """.trimIndent(),
-            scope
-        )
+                """.trimIndent(),
+                scope
+            )
+        }.onFailure {
+            Log.w(TAG, "loadEditorRuntime onLoadUI failed (non-fatal)", it)
+        }
     }
 
-    private fun installPluginGlobals(scope: Scriptable, websocketFactory: WebsocketFactory) {
+    fun installPluginGlobals(scope: Scriptable, websocketFactory: WebsocketFactory) {
         ScriptableObject.putProperty(scope, "__jreadWebsocketFactory", websocketFactory)
         ScriptableObject.putProperty(scope, "__jreadThreadScheduler", websocketFactory.threadScheduler)
         ScriptableObject.putProperty(scope, "__jreadBuffer", BufferFacade())
@@ -641,15 +667,26 @@ object JReadVoicePluginRuntime {
         )
     }
 
-    private fun preparePluginCode(code: String): String {
-        return code
+    fun preparePluginCode(code: String): String {
+        val stripped = if (code.startsWith("@js:", ignoreCase = true)) {
+            code.substringAfter("@js:").trimStart()
+        } else code
+        return stripped
             .replace("new java.lang.Thread", "new __jreadThread")
             .replace("java.lang.Thread.sleep", "__jreadThreadSleep")
+            // 把 new android.widget.Switch(ctx) 替换为 new JSwitch(ctx)，
+            // 因为真实 android.widget.Switch 的 setOnCheckedChangeListener 回调
+            // 会通过 Rhino InterfaceAdapter 调用 JS 函数，但没有 Context.enter()，导致崩溃。
+            // JSwitch 内部有 Context.enter()/exit() 保护。
+            .replace("new android.widget.Switch(", "new JSwitch(")
     }
 
-    private fun installPluginCompatShims(scope: Scriptable) {
-        RhinoScriptEngine.eval(
-            """
+    fun installPluginCompatShims(scope: Scriptable, context: Context? = null) {
+        scope.put("__jreadCtx", scope, context)
+        runCatching {
+            RhinoScriptEngine.eval(
+                """
+            var __jreadCtx = __jreadCtx;
             // 部分 J.TTS 插件会用 java.lang.Thread 做内部超时检查。
             // J阅读这里由宿主 waitForCallbackAudio 统一超时，避免 JS 回调从任意 Java 线程进入 Rhino。
             if (typeof startMaoxiangTimeoutCheck === 'function') {
@@ -690,269 +727,229 @@ object JReadVoicePluginRuntime {
                     return out;
                 };
             }
-            if (typeof __jreadMakeUiBase !== 'function') {
-                var __jreadMakeUiBase = function() {
-                    return {
-                        children: [],
-                        visibility: 0,
-                        layoutParams: null,
-                        backgroundColor: 0,
-                        textColor: 0,
-                        _clickListener: null,
-                        addView: function(view) { this.children.push(view); return view; },
-                        removeAllViews: function() { this.children = []; },
-                        setOrientation: function(value) { this.orientation = value; },
-                        setDescendantFocusability: function(value) { this.descendantFocusability = value; },
-                        setPadding: function(left, top, right, bottom) {
-                            this.padding = { left: left || 0, top: top || 0, right: right || 0, bottom: bottom || 0 };
-                        },
-                        setMargins: function(left, top, right, bottom) {
-                            this.margins = { left: left || 0, top: top || 0, right: right || 0, bottom: bottom || 0 };
-                        },
-                        setVisibility: function(value) { this.visibility = value; },
-                        getVisibility: function() { return this.visibility; },
-                        setLayoutParams: function(value) { this.layoutParams = value; },
-                        getLayoutParams: function() { return this.layoutParams; },
-                        setBackgroundColor: function(value) { this.backgroundColor = value; },
-                        setTextColor: function(value) { this.textColor = value; },
-                        setText: function(value) { this.text = value == null ? "" : String(value); },
-                        getText: function() { return this.text || ""; },
-                        setHint: function(value) { this.hint = value == null ? "" : String(value); },
-                        setEnabled: function(value) { this.enabled = !!value; },
-                        setOnClickListener: function(listener) { this._clickListener = listener; },
-                        performClick: function() {
-                            if (!this._clickListener) return false;
-                            if (typeof this._clickListener === 'function') this._clickListener(this);
-                            else if (typeof this._clickListener.onClick === 'function') this._clickListener.onClick(this);
-                            return true;
-                        }
-                    };
-                };
-                var __jreadCreateLinearLayout = function(ctx) {
-                    var view = __jreadMakeUiBase();
-                    view.orientation = 1;
-                    return view;
-                };
-                var __jreadCreateContext = function() {
-                    return {
-                        getResources: function() {
-                            return {
-                                getDisplayMetrics: function() {
-                                    return { density: 1, scaledDensity: 1, widthPixels: 1080, heightPixels: 1920 };
-                                }
-                            };
-                        },
-                        getPackageName: function() { return "io.legato.kazusa.jread.debug"; },
-                        getApplicationContext: function() { return this; }
-                    };
-                };
-                var Item = function(name, value) {
-                    return { name: name, value: value };
-                };
-                var JSpinner = function(ctx, hint) {
-                    var view = __jreadMakeUiBase();
-                    view.hint = hint == null ? "" : String(hint);
-                    view.items = [];
-                    view.selectedPosition = 0;
-                    view._itemListener = null;
-                    Object.defineProperty(view, 'value', {
-                        get: function() {
-                            var item = this.items && this.items.length ? this.items[Math.max(0, this.selectedPosition || 0)] : null;
-                            return item ? item.value : null;
-                        },
-                        set: function(value) {
-                            if (!this.items) this.items = [];
-                            for (var i = 0; i < this.items.length; i++) {
-                                if (String(this.items[i].value) === String(value)) {
-                                    this.selectedPosition = i;
-                                    return;
-                                }
-                            }
-                            this.selectedPosition = 0;
-                        }
-                    });
-                    view.setOnItemSelected = function(listener) { this._itemListener = listener; };
-                    view.select = function(position) {
-                        this.selectedPosition = Math.max(0, position || 0);
-                        var item = this.items && this.items.length ? this.items[this.selectedPosition] : null;
-                        if (!this._itemListener || !item) return;
-                        if (typeof this._itemListener === 'function') this._itemListener(this, this.selectedPosition, item);
-                        else if (typeof this._itemListener.onItemSelected === 'function') this._itemListener.onItemSelected(this, this.selectedPosition, item);
-                    };
-                    return view;
-                };
-                var __jreadEditable = function(initial) {
-                    return {
-                        _value: initial == null ? "" : String(initial),
-                        set: function(value) { this._value = value == null ? "" : String(value); },
-                        append: function(value) { this._value += value == null ? "" : String(value); return this; },
-                        clear: function() { this._value = ""; },
-                        toString: function() { return this._value; },
-                        length: function() { return this._value.length; }
-                    };
-                };
-                var JTextInput = function(ctx, hint) {
-                    var view = __jreadMakeUiBase();
-                    view.hint = hint == null ? "" : String(hint);
-                    view.text = __jreadEditable("");
-                    view._textListener = null;
-                    view.setText = function(value) {
-                        this.text.set(value);
-                        if (!this._textListener) return;
-                        if (typeof this._textListener === 'function') this._textListener(this.text.toString());
-                        else if (typeof this._textListener.onChanged === 'function') this._textListener.onChanged(this.text.toString());
-                    };
-                    view.getText = function() { return this.text; };
-                    view.setOnTextChangedListener = function(listener) { this._textListener = listener; };
-                    view.addTextChangedListener = view.setOnTextChangedListener;
-                    return view;
-                };
-                var JSeekBar = function(ctx, hint) {
-                    var view = __jreadMakeUiBase();
-                    view.hint = hint == null ? "" : String(hint);
-                    view.max = 0;
-                    view.value = 0;
-                    view._floatDigits = 0;
-                    view._changeListener = null;
-                    view.setFloatType = function(value) { this._floatDigits = value || 0; };
-                    view.setOnChangeListener = function(listener) { this._changeListener = listener; };
-                    return view;
-                };
-                var LinearLayout = function(ctx) { return __jreadCreateLinearLayout(ctx); };
-                LinearLayout.HORIZONTAL = 0;
-                LinearLayout.VERTICAL = 1;
-                LinearLayout.LayoutParams = function(width, height, weight) {
-                    return {
-                        width: width,
-                        height: height,
-                        weight: weight || 0,
-                        leftMargin: 0,
-                        topMargin: 0,
-                        rightMargin: 0,
-                        bottomMargin: 0,
-                        setMargins: function(left, top, right, bottom) {
-                            this.leftMargin = left || 0;
-                            this.topMargin = top || 0;
-                            this.rightMargin = right || 0;
-                            this.bottomMargin = bottom || 0;
-                        }
-                    };
-                };
-                LinearLayout.LayoutParams.MATCH_PARENT = -1;
-                LinearLayout.LayoutParams.WRAP_CONTENT = -2;
-                var TextView = function(ctx) { return __jreadMakeUiBase(); };
-                var Button = function(ctx) { return __jreadMakeUiBase(); };
-                var EditText = function(ctx) {
-                    var view = JTextInput(ctx, "");
-                    view.setSingleLine = function(value) { this.singleLine = !!value; };
-                    view.setMaxLines = function(value) { this.maxLines = value || 0; };
-                    view.setMinLines = function(value) { this.minLines = value || 0; };
-                    view.setGravity = function(value) { this.gravity = value; };
-                    view.setTextSize = function(value) { this.textSize = value; };
-                    view.setHintTextColor = function(value) { this.hintTextColor = value; };
-                    view.setBackgroundDrawable = function(value) { this.backgroundDrawable = value; };
-                    view.setMinHeight = function(value) { this.minHeight = value; };
-                    return view;
-                };
-                var Spinner = function(ctx) {
-                    var view = JSpinner(ctx, "");
-                    view.setAdapter = function(adapter) { this.adapter = adapter; this.items = adapter && adapter.items ? adapter.items : []; };
-                    return view;
-                };
-                var ArrayAdapter = function(ctx, layout, items) {
-                    return {
-                        items: items || [],
-                        setDropDownViewResource: function(value) { this.dropDownViewResource = value; }
-                    };
-                };
-                var GradientDrawable = function() {
-                    return {
-                        setShape: function(value) { this.shape = value; },
-                        setColor: function(value) { this.color = value; },
-                        setStroke: function(width, color) { this.stroke = { width: width, color: color }; },
-                        setCornerRadius: function(value) { this.cornerRadius = value; }
-                    };
-                };
-                GradientDrawable.RECTANGLE = 0;
-                var Toast = {
-                    LENGTH_SHORT: 0,
-                    LENGTH_LONG: 1,
-                    makeText: function(ctx, text, length) {
-                        return { show: function() { try { __jreadLogger.i(String(text)); } catch (ignore) {} } };
-                    }
-                };
-                var __jreadColor = {
-                    WHITE: -1,
-                    TRANSPARENT: 0,
-                    BLACK: -16777216,
-                    parseColor: function(value) { return 0; }
-                };
-                var View = { VISIBLE: 0, INVISIBLE: 4, GONE: 8 };
-                var ViewGroup = { FOCUS_BLOCK_DESCENDANTS: 0 };
-                var Gravity = { TOP: 48, START: 8388611, CENTER: 17, CENTER_VERTICAL: 16 };
-                var Typeface = { DEFAULT: {}, BOLD: 1, NORMAL: 0 };
-                var Handler = function(looper) {
-                    return {
-                        post: function(runnable) {
-                            if (runnable && typeof runnable.run === 'function') runnable.run();
-                            else if (typeof runnable === 'function') runnable();
-                            return true;
-                        }
-                    };
-                };
-                var Looper = { getMainLooper: function() { return {}; } };
-                var Runnable = function(obj) { return obj || { run: function() {} }; };
-                if (typeof android === 'undefined' || String(android).indexOf('[JavaPackage') >= 0) {
-                    var android = {
-                        R: { layout: { simple_spinner_item: 0, simple_spinner_dropdown_item: 1 } },
-                        util: { Base64: Packages.android.util.Base64 },
-                        os: { Handler: Handler, Looper: Looper },
-                        view: { View: View, ViewGroup: ViewGroup, Gravity: Gravity },
-                        widget: {
-                            LinearLayout: LinearLayout,
-                            TextView: TextView,
-                            EditText: EditText,
-                            Spinner: Spinner,
-                            ArrayAdapter: ArrayAdapter,
-                            Button: Button,
-                            Toast: Toast
-                        },
-                        graphics: {
-                            Color: __jreadColor,
-                            Typeface: Typeface,
-                            drawable: { GradientDrawable: GradientDrawable }
-                        },
-                        text: { TextUtils: { isEmpty: function(value) { return value == null || String(value).length === 0; } } }
-                    };
-                } else {
-                    if (!android.R) android.R = { layout: { simple_spinner_item: 0, simple_spinner_dropdown_item: 1 } };
-                    if (!android.view) android.view = {};
-                    if (!android.view.View) android.view.View = View;
-                    if (!android.view.ViewGroup) android.view.ViewGroup = ViewGroup;
-                    if (!android.view.Gravity) android.view.Gravity = Gravity;
-                    if (!android.os) android.os = {};
-                    if (!android.os.Handler) android.os.Handler = Handler;
-                    if (!android.os.Looper) android.os.Looper = Looper;
-                    if (!android.widget) android.widget = {};
-                    if (!android.widget.LinearLayout) android.widget.LinearLayout = LinearLayout;
-                    if (!android.widget.TextView) android.widget.TextView = TextView;
-                    if (!android.widget.EditText) android.widget.EditText = EditText;
-                    if (!android.widget.Spinner) android.widget.Spinner = Spinner;
-                    if (!android.widget.ArrayAdapter) android.widget.ArrayAdapter = ArrayAdapter;
-                    if (!android.widget.Button) android.widget.Button = Button;
-                    if (!android.widget.Toast) android.widget.Toast = Toast;
-                    if (!android.graphics) android.graphics = {};
-                    if (!android.graphics.Color) android.graphics.Color = __jreadColor;
-                    if (!android.graphics.Typeface) android.graphics.Typeface = Typeface;
-                    if (!android.graphics.drawable) android.graphics.drawable = {};
-                    if (!android.graphics.drawable.GradientDrawable) android.graphics.drawable.GradientDrawable = GradientDrawable;
-                    if (!android.text) android.text = {};
-                    if (!android.text.TextUtils) android.text.TextUtils = { isEmpty: function(value) { return value == null || String(value).length === 0; } };
-                }
-            }
             """.trimIndent(),
-            scope
+                scope
+            )
+        }.onFailure {
+            Log.e(TAG, "installPluginCompatShims base shims failed", it)
+        }
+
+        // 逐个注入简称，每个独立 try-catch，避免某一个失败导致全部缺失。
+        val shortNames = mapOf(
+            "JSpinner" to "Packages.io.legado.app.help.audiobook.plugin.JSpinner",
+            "JSeekBar" to "Packages.io.legado.app.help.audiobook.plugin.JSeekBar",
+            "JTextInput" to "Packages.io.legado.app.help.audiobook.plugin.JTextInput",
+            "JSwitch" to "Packages.io.legado.app.help.audiobook.plugin.JSwitch",
+            "Item" to "Packages.io.legado.app.help.audiobook.plugin.Item",
+            "View" to "Packages.android.view.View",
+            "ViewGroup" to "Packages.android.view.ViewGroup",
+            "Gravity" to "Packages.android.view.Gravity",
+            "LinearLayout" to "Packages.android.widget.LinearLayout",
+            "Switch" to "Packages.io.legado.app.help.audiobook.plugin.JSwitch",
+            "CompoundButton" to "Packages.android.widget.CompoundButton",
+            "TextView" to "Packages.android.widget.TextView",
+            "EditText" to "Packages.android.widget.EditText",
+            "Button" to "Packages.android.widget.Button",
+            "Spinner" to "Packages.android.widget.Spinner",
+            "ArrayAdapter" to "Packages.android.widget.ArrayAdapter",
+            "SeekBar" to "Packages.android.widget.SeekBar",
+            "CheckBox" to "Packages.android.widget.CheckBox",
+            "RadioButton" to "Packages.android.widget.RadioButton",
+            "RadioGroup" to "Packages.android.widget.RadioGroup",
+            "FrameLayout" to "Packages.android.widget.FrameLayout",
+            "ScrollView" to "Packages.android.widget.ScrollView",
+            "ImageView" to "Packages.android.widget.ImageView",
+            "Toast" to "Packages.android.widget.Toast",
         )
+        for ((name, pkg) in shortNames) {
+            runCatching {
+                RhinoScriptEngine.eval("var $name = $pkg;", scope)
+            }.onFailure {
+                Log.w(TAG, "installPluginCompatShims: failed to inject $name", it)
+            }
+        }
+
+        // 确保 android 全局变量指向 Packages.android
+        runCatching {
+            RhinoScriptEngine.eval(
+                """if (typeof android === 'undefined') { var android = Packages.android; }""",
+                scope
+            )
+        }.onFailure {
+            Log.w(TAG, "installPluginCompatShims: failed to inject android", it)
+        }
+    }
+
+    /**
+     * 动态渲染插件自定义控件。
+     * 在 IO 线程执行插件代码并调用 onLoadData（可能含网络请求），
+     * 再切回主线程调用 onLoadUI 把控件（真实 android.widget.*）addView 进容器。
+     * 控件值变更通过插件自身写回 runtime.tts.data（即 dataMap），保存时合并进 config.dataJson。
+     * 返回根布局（真实 ViewGroup），若插件没有 EditorJS/PluginJS 或渲染失败则返回 null。
+     */
+    suspend fun loadPluginEditorUI(
+        context: Context,
+        plugin: JReadVoiceEngine.VoicePlugin,
+        dataMap: MutableMap<String, String>,
+    ): ViewGroup? {
+        if (plugin.code.isBlank()) return null
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val dataJson = JSONObject(dataMap as Map<*, *>).toString()
+                val runtime = RuntimeBridge(
+                    context = context,
+                    plugin = plugin,
+                    config = JReadVoiceEngine.VoiceConfig(
+                        voiceTag = "",
+                        dataJson = dataJson,
+                    ),
+                    pointer = JSONObject(),
+                    externalDataMap = dataMap,
+                )
+                val bindings = ScriptBindings().apply {
+                    put("ttsrv", runtime)
+                    put("fs", runtime.fs)
+                    put("http", runtime.http)
+                }
+                val scope = RhinoScriptEngine.getRuntimeScope(bindings)
+                installPluginGlobals(scope, WebsocketFactory(context))
+                installPluginCompatShims(scope, context)
+                RhinoScriptEngine.eval(preparePluginCode(plugin.code), scope)
+                installPluginCompatShims(scope, context)
+                val uiObjectName = when {
+                    ScriptableObject.getProperty(scope, "EditorJS") is ScriptableObject -> "EditorJS"
+                    ScriptableObject.getProperty(scope, "PluginJS") is ScriptableObject -> "PluginJS"
+                    else -> ""
+                }
+                if (uiObjectName.isBlank()) return@runCatching null
+                // onLoadData 可能含网络请求，放在 IO 线程
+                if (ScriptableObject.getProperty(scope, uiObjectName) is ScriptableObject &&
+                    ScriptableObject.hasProperty(scope, uiObjectName)
+                ) {
+                    runCatching {
+                        RhinoScriptEngine.eval(
+                            "if (typeof $uiObjectName.onLoadData === 'function') { $uiObjectName.onLoadData(); }",
+                            scope
+                        )
+                    }.onFailure {
+                        Log.w(TAG, "loadPluginEditorUI onLoadData failed: plugin=${plugin.name}", it)
+                    }
+                }
+                // runtime.tts.data 已与外部 dataMap 共享同一引用，
+                // onLoadData 修改的值会实时同步到 dataMap。
+                // onLoadUI 必须在主线程创建真实 View。
+                // 直接传真实 LinearLayout 作为容器，插件代码 b.addView(JSpinner(...)) 直接工作，
+                // 因为 JSpinner 继承 FrameLayout，本身就是 View。
+                withContext(Dispatchers.Main) {
+                    val container = LinearLayout(context).apply {
+                        orientation = LinearLayout.VERTICAL
+                        layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.WRAP_CONTENT
+                        )
+                    }
+                    ScriptableObject.putProperty(scope, "__jreadContainer", container)
+                    RhinoScriptEngine.eval(
+                        """
+                        (function() {
+                            var __jreadUiContext = __jreadCtx;
+                            var __jreadUiContainer = __jreadContainer;
+                            if (typeof $uiObjectName.onLoadUI === 'function') {
+                                $uiObjectName.onLoadUI(__jreadUiContext, __jreadUiContainer);
+                            }
+                        })();
+                        """.trimIndent(),
+                        scope
+                    )
+                    Log.d(TAG, "loadPluginEditorUI onLoadUI done: plugin=${plugin.name}, childCount=${container.childCount}")
+                    container
+                }
+            }.getOrElse {
+                Log.w(TAG, "loadPluginEditorUI failed: plugin=${plugin.name}", it)
+                null
+            }
+        }
+    }
+
+    /**
+     * 在已有 scope 中调用 onLoadUI，返回真实 LinearLayout 容器。
+     * 供 PluginEditorSession 使用，确保 onLoadUI 和 onVoiceChanged 在同一 scope。
+     */
+    suspend fun onLoadUI(scope: Scriptable, uiObjectName: String, context: Context): LinearLayout? {
+        return withContext(Dispatchers.Main) {
+            val container = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            }
+            ScriptableObject.putProperty(scope, "__jreadContainer", container)
+            val result = runCatching {
+                RhinoScriptEngine.eval(
+                    """
+                    (function() {
+                        var __jreadUiContext = __jreadCtx;
+                        var __jreadUiContainer = __jreadContainer;
+                        if (typeof $uiObjectName.onLoadUI === 'function') {
+                            $uiObjectName.onLoadUI(__jreadUiContext, __jreadUiContainer);
+                        }
+                    })();
+                    """.trimIndent(),
+                    scope
+                )
+            }
+            result.onSuccess {
+                Log.d(TAG, "onLoadUI done: childCount=${container.childCount}")
+            }
+            result.onFailure {
+                Log.e(TAG, "onLoadUI FAILED: uiObject=$uiObjectName", it)
+                // 把错误信息作为 TextView 显示在容器里，让用户直接看到
+                val tv = android.widget.TextView(context).apply {
+                    text = "onLoadUI 错误: ${it.message}\n\n${it.stackTraceToString().take(500)}"
+                    setTextColor(android.graphics.Color.RED)
+                    textSize = 12f
+                    setPadding(24, 24, 24, 24)
+                }
+                container.addView(tv)
+            }
+            container
+        }
+    }
+
+    /**
+     * 在已有 scope 中调用 onListVoices，返回音色列表。
+     * 供 PluginEditorSession 使用。
+     */
+    fun invokeListVoices(scope: Scriptable, uiObjectName: String, locale: String): List<VoiceOption> {
+        val candidateLocales = linkedSetOf(locale.ifBlank { "zh-CN" }, "zh-CN").apply {
+            addAll(readPluginLocaleOptionsFromScope(scope, uiObjectName).map { it.id })
+        }.filter { it.isMeaningfulLocaleId() }
+        for (candidateLocale in candidateLocales) {
+            val result = runCatching {
+                evalPluginVoices(scope, uiObjectName, candidateLocale)
+            }.getOrElse {
+                Log.w(TAG, "invokeListVoices candidate failed: locale=$candidateLocale", it)
+                null
+            }
+            val options = voicesResultToOptions(result)
+            if (options.isNotEmpty()) return options
+        }
+        return emptyList()
+    }
+
+    /**
+     * 在已有 scope 中调用 onListLocales，返回语言列表。
+     * 供 PluginEditorSession 使用。
+     */
+    fun invokeListLocales(scope: Scriptable, uiObjectName: String): List<LocaleOption> {
+        val result = runCatching {
+            evalPluginLocales(scope, uiObjectName)
+        }.getOrElse {
+            Log.w(TAG, "invokeListLocales failed", it)
+            null
+        }
+        return localesResultToOptions(result)
     }
 
     private fun waitForCallbackAudio(
@@ -1025,8 +1022,27 @@ object JReadVoicePluginRuntime {
             is Map<*, *> -> value.entries.mapNotNull { (key, rawValue) ->
                 localeEntryToOption(key?.toString().orEmpty(), rawValue)
             }
-            is Scriptable -> scriptableIds(value).mapNotNull { id ->
-                localeEntryToOption(id, ScriptableObject.getProperty(value, id))
+            is Scriptable -> {
+                // JS 数组（NativeArray）也是 Scriptable，先检查是否为数组
+                val lenProp = ScriptableObject.getProperty(value, "length")
+                if (lenProp != Scriptable.NOT_FOUND && lenProp is Number) {
+                    // 数组格式：["zh-CN", "en-US"]，每个元素是 locale 字符串
+                    val n = lenProp.toInt()
+                    (0 until n).mapNotNull { i ->
+                        val item = ScriptableObject.getProperty(value, i)
+                        val str = (item as? Wrapper)?.unwrap()?.toString() ?: item?.toString()
+                        if (str.isNullOrBlank()) null else LocaleOption(str.trim(), str.trim())
+                    }
+                } else {
+                    // JS 对象格式：{"zh-CN": "中文"}
+                    scriptableIds(value).mapNotNull { id ->
+                        localeEntryToOption(id, ScriptableObject.getProperty(value, id))
+                    }
+                }
+            }
+            is List<*> -> value.mapNotNull { item ->
+                val str = item?.toString()?.trim()
+                if (str.isNullOrBlank()) null else LocaleOption(str, str)
             }
             else -> emptyList()
         }.filter { it.id.isNotBlank() }.distinctBy { it.id }
@@ -1386,6 +1402,7 @@ object JReadVoicePluginRuntime {
         private val plugin: JReadVoiceEngine.VoicePlugin,
         config: JReadVoiceEngine.VoiceConfig,
         pointer: JSONObject,
+        externalDataMap: MutableMap<String, String>? = null,
     ) {
         val defVars: MutableMap<String, String> = jsonObjectToMap(plugin.defVarsJson)
         val userVars: MutableMap<String, String> = normalizeUserVars(jsonObjectToMap(plugin.userVarsJson))
@@ -1400,7 +1417,7 @@ object JReadVoicePluginRuntime {
             pitch = config.pitch,
             userVars = userVars,
             defVars = defVars,
-            data = jsonObjectToMap(config.dataJson).apply {
+            data = (externalDataMap ?: jsonObjectToMap(config.dataJson)).apply {
                 if (!containsKey("voiceTag")) put("voiceTag", config.voiceTag)
                 if (!containsKey("roleName")) put("roleName", pointer.optString("roleName"))
                 if (!containsKey("emotion")) put("emotion", pointer.optString("emotion"))
@@ -1555,7 +1572,23 @@ object JReadVoicePluginRuntime {
             Log.i(TAG, "Plugin playAudioChunk ignored in JRead preview runtime: bytes=${anyToBytes(value).size}")
         }
 
-        fun setMargins(vararg args: Any?) = Unit
+        fun setMargins(view: Any?, left: Int, top: Int, right: Int, bottom: Int) {
+            val realView = when (view) {
+                is View -> view
+                else -> return
+            }
+            val lp = realView.layoutParams
+            if (lp is ViewGroup.MarginLayoutParams) {
+                val d = context.resources.displayMetrics.density
+                lp.setMargins(
+                    (left * d).toInt(),
+                    (top * d).toInt(),
+                    (right * d).toInt(),
+                    (bottom * d).toInt()
+                )
+                realView.layoutParams = lp
+            }
+        }
 
         fun localSoundFastPath(text: String): ByteArray? {
             if (!isLocalSoundPlugin()) return null

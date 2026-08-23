@@ -148,6 +148,13 @@ cn.hutool.core.util.**{*;}
 # GSYVideoPlayer
 -keep class com.shuyu.gsyvideoplayer.** { *; }
 -dontwarn com.shuyu.gsyvideoplayer.**
+
+# TTS 插件 UI 控件类和编辑器 session（通过 JS 反射调用，不能被 R8 优化）
+-keep class io.legado.app.help.audiobook.plugin.** { *; }
+-keep class io.legado.app.help.audiobook.PluginEditorSession { *; }
+-keep class io.legado.app.help.audiobook.PluginEditorSession$* { *; }
+-keep class io.legado.app.help.audiobook.JReadVoicePluginRuntime { *; }
+-keep class io.legado.app.help.audiobook.JReadVoicePluginRuntime$* { *; }
 #-keep class com.shuyu.gsyvideoplayer.video.** { *; }
 #-dontwarn com.shuyu.gsyvideoplayer.video.**
 #-keep class com.shuyu.gsyvideoplayer.video.base.** { *; }

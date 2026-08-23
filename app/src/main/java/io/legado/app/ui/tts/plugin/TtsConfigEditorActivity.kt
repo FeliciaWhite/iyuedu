@@ -14,6 +14,7 @@ import io.legado.app.base.BaseActivity
 import io.legado.app.databinding.ActivityTtsConfigEditorBinding
 import io.legado.app.help.audiobook.JReadVoiceEngine
 import io.legado.app.help.audiobook.JReadVoicePluginRuntime
+import io.legado.app.help.audiobook.PluginEditorSession
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers
@@ -32,6 +33,7 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
     private var voiceOptions: List<JReadVoicePluginRuntime.VoiceOption> = emptyList()
     private var presetOptions: List<JReadVoicePluginRuntime.PluginPresetOption> = emptyList()
     private var pluginDataFields = mutableMapOf<String, String>()
+    private var editorSession: PluginEditorSession? = null
 
     companion object {
         const val EXTRA_CONFIG_ID = "configId"
@@ -138,17 +140,24 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         val pluginNames = listOf("单项直连/不使用插件") + plugins.map { TtsPluginAdapter.displayNameForConfigCard(it) }
         binding.spinnerPlugin.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, pluginNames)
         val pluginIdx = plugins.indexOfFirst { it.id == config.pluginId || it.pluginId == config.pluginId }
-        if (pluginIdx >= 0) binding.spinnerPlugin.setSelection(pluginIdx + 1)
         pluginDataFields = runCatching {
             val obj = JSONObject(config.dataJson.ifBlank { "{}" })
             mutableMapOf<String, String>().apply { obj.keys().forEach { put(it, obj.optString(it)) } }
         }.getOrDefault(mutableMapOf())
+        if (pluginIdx >= 0) {
+            binding.spinnerPlugin.setSelection(pluginIdx + 1)
+            // onPluginSelected 会被 setSelection 异步触发，不需要再手动调用 renderPluginUi
+        }
         recognizeTimbreTag()
     }
 
     private fun onPluginSelected(position: Int) {
         val plugin = if (position > 0) plugins.getOrNull(position - 1) else null
         if (plugin == null || plugin.code.isBlank()) {
+            editorSession?.close()
+            editorSession = null
+            binding.layoutPluginUi.removeAllViews()
+            binding.layoutPluginUi.visibility = View.GONE
             binding.spinnerLocale.visibility = View.GONE
             binding.etLocale.visibility = View.VISIBLE
             binding.layoutPreset.visibility = View.GONE
@@ -158,8 +167,13 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         binding.spinnerLocale.visibility = View.VISIBLE
         binding.etLocale.visibility = View.GONE
         lifecycleScope.launch {
-            localeOptions = withContext(Dispatchers.IO) {
-                runCatching { JReadVoicePluginRuntime.listLocales(this@TtsConfigEditorActivity, plugin) }.getOrDefault(emptyList())
+            // 先渲染插件 UI（创建 session），等 session 初始化完成后再查询 locales
+            renderPluginUi(plugin)
+            val session = editorSession
+            localeOptions = if (session != null && session.isInitialized) {
+                withContext(Dispatchers.IO) { runCatching { session.listLocales() }.getOrDefault(emptyList()) }
+            } else {
+                withContext(Dispatchers.IO) { runCatching { JReadVoicePluginRuntime.listLocales(this@TtsConfigEditorActivity, plugin) }.getOrDefault(emptyList()) }
             }
             if (localeOptions.isEmpty()) {
                 binding.spinnerLocale.visibility = View.GONE
@@ -176,17 +190,54 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         }
     }
 
+    private suspend fun renderPluginUi(plugin: JReadVoiceEngine.VoicePlugin) {
+        // 关闭旧 session
+        editorSession?.close()
+        editorSession = null
+        binding.layoutPluginUi.removeAllViews()
+        val session = PluginEditorSession(this@TtsConfigEditorActivity, plugin, pluginDataFields)
+        val result = runCatching { withContext(Dispatchers.IO) { session.init() } }
+        result.onFailure {
+            android.util.Log.e("TtsConfigEditor", "renderPluginUi init failed: ${plugin.name}", it)
+            toastOnUi("插件初始化失败: ${it.message}")
+        }
+        val container = result.getOrNull()
+        if (container != null) {
+            editorSession = session
+            binding.layoutPluginUi.addView(container)
+            binding.layoutPluginUi.visibility = View.VISIBLE
+            android.util.Log.d("TtsConfigEditor", "renderPluginUi ok: ${plugin.name}, childCount=${container.childCount}")
+            // 初始加载后触发 onVoiceChanged，让插件根据当前音色更新 UI
+            val currentVoice = config.voice
+            if (currentVoice.isNotBlank()) {
+                val locale = if (localeOptions.isNotEmpty() && binding.spinnerLocale.selectedItemPosition < localeOptions.size) {
+                    localeOptions[binding.spinnerLocale.selectedItemPosition].id
+                } else config.locale.ifBlank { "zh-CN" }
+                session.onVoiceChanged(locale, currentVoice)
+            }
+        } else {
+            binding.layoutPluginUi.visibility = View.GONE
+        }
+    }
+
     private fun onLocaleSelected(position: Int) {
         if (localeOptions.isEmpty() || position >= localeOptions.size) return
         val locale = localeOptions[position].id
-        val pluginIdx = binding.spinnerPlugin.selectedItemPosition
-        if (pluginIdx <= 0) return
-        val plugin = plugins.getOrNull(pluginIdx - 1) ?: return
+        val session = editorSession
         voiceOptions = emptyList()
         binding.spinnerVoice.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("加载中..."))
         lifecycleScope.launch {
             voiceOptions = withContext(Dispatchers.IO) {
-                runCatching { JReadVoicePluginRuntime.listVoices(this@TtsConfigEditorActivity, plugin, locale) }.getOrDefault(emptyList())
+                if (session != null && session.isInitialized) {
+                    runCatching { session.listVoices(locale) }.getOrDefault(emptyList())
+                } else {
+                    val pluginIdx = binding.spinnerPlugin.selectedItemPosition
+                    if (pluginIdx <= 0) emptyList()
+                    else {
+                        val plugin = plugins.getOrNull(pluginIdx - 1) ?: return@withContext emptyList()
+                        runCatching { JReadVoicePluginRuntime.listVoices(this@TtsConfigEditorActivity, plugin, locale) }.getOrDefault(emptyList())
+                    }
+                }
             }
             if (voiceOptions.isEmpty()) {
                 binding.spinnerVoice.adapter = ArrayAdapter(this@TtsConfigEditorActivity, android.R.layout.simple_spinner_dropdown_item, listOf("无可用音色"))
@@ -212,22 +263,12 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
     }
 
     private fun notifyVoiceChanged(voiceId: String) {
-        val pluginIdx = binding.spinnerPlugin.selectedItemPosition
-        if (pluginIdx <= 0) return
-        val plugin = plugins.getOrNull(pluginIdx - 1) ?: return
+        val session = editorSession ?: return
         val locale = if (localeOptions.isNotEmpty() && binding.spinnerLocale.selectedItemPosition < localeOptions.size) {
             localeOptions[binding.spinnerLocale.selectedItemPosition].id
         } else { binding.etLocale.text.toString().trim().ifBlank { "zh-CN" } }
         lifecycleScope.launch {
-            val updatedData = withContext(Dispatchers.IO) {
-                runCatching { JReadVoicePluginRuntime.notifyVoiceChanged(this@TtsConfigEditorActivity, plugin, locale, voiceId, buildDataJson()) }
-                    .getOrDefault(emptyMap())
-            }
-            if (updatedData.isNotEmpty()) {
-                pluginDataFields.putAll(updatedData)
-                val pIdx = binding.spinnerPlugin.selectedItemPosition
-                if (pIdx > 0) { val p = plugins.getOrNull(pIdx - 1); if (p?.code?.contains("getRulePresets") == true) loadPresetOptions(p) }
-            }
+            session.onVoiceChanged(locale, voiceId)
         }
     }
 

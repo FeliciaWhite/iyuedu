@@ -167,6 +167,11 @@
                             android:layout_height="wrap_content" android:textSize="13sp"
                             android:minLines="3" android:visibility="gone" android:layout_marginBottom="8dp" />
                     </LinearLayout>
+
+                    <!-- 插件自定义控件（动态渲染 onLoadUI 的控件树） -->
+                    <LinearLayout android:id="@+id/layout_plugin_ui" android:layout_width="match_parent"
+                        android:layout_height="wrap_content" android:orientation="vertical"
+                        android:visibility="gone" android:layout_marginTop="4dp" />
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
 

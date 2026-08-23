@@ -86,12 +86,6 @@ object JReadVoicePluginRuntime {
         val name: String,
     )
 
-    data class PluginPresetOption(
-        val name: String,
-        val value: String,
-        val contextText: String = "",
-    )
-
     fun synthesize(
         context: Context,
         plugin: JReadVoiceEngine.VoicePlugin,
@@ -203,26 +197,8 @@ object JReadVoicePluginRuntime {
         runtime: RuntimeBridge,
     ) {
         val data = runtime.tts.data
-        val presetIndex = data["clonePresetIndex"].orEmpty().trim().toIntOrNull() ?: 0
-        if (presetIndex <= 0) {
-            if (data["contextTexts"].isNullOrBlank()) {
-                data["manualContextTexts"]?.takeIf { it.isNotBlank() }?.let { data["contextTexts"] = it }
-            }
-            return
-        }
-        if (!data["contextTexts"].isNullOrBlank()) return
-        val options = readRulePresetOptionsFromScope(scope)
-        Log.i(TAG, "Synthesize preset lookup: preset=$presetIndex options=${options.size}")
-        val option = options
-            .firstOrNull { it.value == presetIndex.toString() }
-            ?: return
-        if (option.contextText.isNotBlank()) {
-            data["contextTexts"] = option.contextText
-            data["clonePresetName"] = option.name
-            Log.i(
-                TAG,
-                "Synthesize preset context restored: preset=${option.name}, contextLen=${option.contextText.length}"
-            )
+        if (data["contextTexts"].isNullOrBlank()) {
+            data["manualContextTexts"]?.takeIf { it.isNotBlank() }?.let { data["contextTexts"] = it }
         }
     }
 
@@ -484,81 +460,6 @@ object JReadVoicePluginRuntime {
             )
             runtime.tts.data.toMap()
         }.getOrElse { emptyMap() }
-    }
-
-    fun listRulePresetOptions(
-        context: Context,
-        plugin: JReadVoiceEngine.VoicePlugin,
-        dataJson: String = "{}",
-    ): List<PluginPresetOption> {
-        if (plugin.code.isBlank()) return emptyList()
-        return runCatching {
-            val runtime = RuntimeBridge(
-                context = context,
-                plugin = plugin,
-                config = JReadVoiceEngine.VoiceConfig(
-                    voiceTag = "",
-                    dataJson = dataJson,
-                ),
-                pointer = JSONObject(),
-            )
-            val bindings = ScriptBindings().apply {
-                put("ttsrv", runtime)
-                put("fs", runtime.fs)
-                put("http", runtime.http)
-            }
-            val scope = RhinoScriptEngine.getRuntimeScope(bindings)
-            installPluginGlobals(scope, WebsocketFactory(context))
-            installPluginCompatShims(scope, context)
-            RhinoScriptEngine.eval(preparePluginCode(plugin.code), scope)
-            installPluginCompatShims(scope, context)
-            val uiObjectName = when {
-                ScriptableObject.getProperty(scope, "EditorJS") is ScriptableObject -> "EditorJS"
-                ScriptableObject.getProperty(scope, "PluginJS") is ScriptableObject -> "PluginJS"
-                else -> ""
-            }
-            if (uiObjectName.isNotBlank()) {
-                runCatching {
-                    loadEditorRuntime(scope, uiObjectName)
-                }.onFailure {
-                    Log.w(TAG, "listRulePresetOptions editor bootstrap failed: plugin=${plugin.name}", it)
-                }
-            }
-            listOf(PluginPresetOption("手写提示词", "0")) + readRulePresetOptionsFromScope(scope)
-        }.getOrElse {
-            Log.w(TAG, "listRulePresetOptions failed: plugin=${plugin.name}", it)
-            emptyList()
-        }
-    }
-
-    private fun readRulePresetOptionsFromScope(scope: Scriptable): List<PluginPresetOption> {
-        val json = runCatching {
-            RhinoScriptEngine.eval(
-                """
-                if (typeof getRulePresets === 'function') {
-                    JSON.stringify(getRulePresets() || []);
-                } else {
-                    "[]";
-                }
-                """.trimIndent(),
-                scope
-            )?.toString().orEmpty()
-        }.getOrDefault("")
-        val fromJson = rulePresetsJsonToOptions(json)
-        if (fromJson.isNotEmpty()) return fromJson
-        val result = runCatching {
-            RhinoScriptEngine.eval(
-                """
-                if (typeof getRulePresets === 'function') {
-                    getRulePresets();
-                } else {
-                    [];
-                }
-                """.trimIndent(),
-                scope
-            )
-        }.getOrNull()
-        return rulePresetsResultToOptions(result)
     }
 
     private fun loadEditorRuntime(
@@ -1076,84 +977,6 @@ object JReadVoicePluginRuntime {
         }.filter { it.id.isNotBlank() }.distinctBy { it.id }
     }
 
-    private fun rulePresetsResultToOptions(result: Any?): List<PluginPresetOption> {
-        val value = (result as? Wrapper)?.unwrap() ?: result ?: return emptyList()
-        val rawItems = when (value) {
-            is Map<*, *> -> value.values.toList()
-            is Scriptable -> value.ids
-                .map { key -> key.toString() }
-                .filterNot { it == "length" }
-                .sortedWith(compareBy<String> { it.toIntOrNull() ?: Int.MAX_VALUE }.thenBy { it })
-                .map { id -> ScriptableObject.getProperty(value, id) }
-            else -> emptyList()
-        }
-        return rawItems.mapIndexedNotNull { index, rawItem ->
-            val item = (rawItem as? Wrapper)?.unwrap() ?: rawItem ?: return@mapIndexedNotNull null
-            val name = readObjectString(item, "name")
-                .ifBlank { readObjectString(item, "title") }
-                .ifBlank { readObjectString(item, "label") }
-                .ifBlank { "预设 ${index + 1}" }
-            val rules = readObjectValue(item, "rules")
-            val contextText = rulesToContextText(rules)
-            PluginPresetOption(
-                name = name,
-                value = (index + 1).toString(),
-                contextText = contextText,
-            )
-        }
-    }
-
-    private fun rulePresetsJsonToOptions(rawJson: String): List<PluginPresetOption> {
-        val raw = rawJson.trim()
-        if (!raw.startsWith("[")) return emptyList()
-        val array = runCatching { JSONArray(raw) }.getOrNull() ?: return emptyList()
-        return (0 until array.length()).mapNotNull { index ->
-            val item = array.optJSONObject(index) ?: return@mapNotNull null
-            val name = item.optString("name")
-                .ifBlank { item.optString("title") }
-                .ifBlank { item.optString("label") }
-                .ifBlank { "预设 ${index + 1}" }
-            val contextText = rulesJsonToContextText(item.opt("rules"))
-            PluginPresetOption(
-                name = name,
-                value = (index + 1).toString(),
-                contextText = contextText,
-            )
-        }
-    }
-
-    private fun rulesJsonToContextText(rawRules: Any?): String {
-        return when (rawRules) {
-            null, JSONObject.NULL -> ""
-            is JSONArray -> (0 until rawRules.length())
-                .mapNotNull { rawRules.opt(it)?.toString()?.takeIf { text -> text.isNotBlank() } }
-                .joinToString("\n")
-            is JSONObject -> rawRules.keys().asSequence()
-                .mapNotNull { key -> rawRules.opt(key)?.toString()?.takeIf { it.isNotBlank() } }
-                .joinToString("\n")
-            else -> rawRules.toString()
-        }
-    }
-
-    private fun rulesToContextText(rawRules: Any?): String {
-        val rules = (rawRules as? Wrapper)?.unwrap() ?: rawRules ?: return ""
-        return when (rules) {
-            is CharSequence -> rules.toString()
-            is Map<*, *> -> rules.values.joinToString("\n") { it?.toString().orEmpty() }
-            is Scriptable -> rules.ids
-                .map { it.toString() }
-                .filterNot { it == "length" }
-                .sortedWith(compareBy<String> { it.toIntOrNull() ?: Int.MAX_VALUE }.thenBy { it })
-                .joinToString("\n") { id ->
-                    ScriptableObject.getProperty(rules, id)
-                        ?.takeUnless { it == Scriptable.NOT_FOUND }
-                        ?.toString()
-                        .orEmpty()
-                }
-            else -> rules.toString()
-        }
-    }
-
     private fun microsoftLocaleOptionsFromCache(runtime: RuntimeBridge): List<LocaleOption> {
         val voices = microsoftVoicesJson(runtime) ?: return emptyList()
         val locales = linkedSetOf("zh-CN")
@@ -1232,20 +1055,6 @@ object JReadVoicePluginRuntime {
             is Map<*, *> -> "Map(size=${value.size}, keys=${value.keys.take(12).joinToString()})"
             else -> value.javaClass.name
         }
-    }
-
-    private fun readObjectValue(rawObject: Any?, key: String): Any? {
-        val value = (rawObject as? Wrapper)?.unwrap() ?: rawObject ?: return null
-        return when (value) {
-            is Map<*, *> -> value[key]
-            is Scriptable -> ScriptableObject.getProperty(value, key)
-                ?.takeUnless { it == Scriptable.NOT_FOUND }
-            else -> null
-        }
-    }
-
-    private fun readObjectString(rawObject: Any?, key: String): String {
-        return readObjectValue(rawObject, key)?.toString().orEmpty()
     }
 
     private fun localeEntryToOption(id: String, rawValue: Any?): LocaleOption? {

@@ -67,16 +67,16 @@
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="4dp">
                         <Spinner android:id="@+id/spinner_gender" android:layout_width="0dp"
-                            android:layout_height="wrap_content" android:layout_weight="1" />
+                            android:layout_height="wrap_content" android:layout_weight="0.8" />
                         <Spinner android:id="@+id/spinner_age" android:layout_width="0dp"
-                            android:layout_height="wrap_content" android:layout_weight="1"
-                            android:layout_marginStart="8dp" />
-                        <EditText android:id="@+id/et_tag_number" android:layout_width="56dp"
-                            android:layout_height="wrap_content" android:layout_marginStart="8dp"
+                            android:layout_height="wrap_content" android:layout_weight="1.2"
+                            android:layout_marginStart="4dp" />
+                        <EditText android:id="@+id/et_tag_number" android:layout_width="35dp"
+                            android:layout_height="wrap_content" android:layout_marginStart="4dp"
                             android:hint="01"
                             android:textSize="13sp" android:inputType="number" />
                         <Button android:id="@+id/btn_generate_tag" android:layout_width="wrap_content"
-                            android:layout_height="wrap_content" android:layout_marginStart="8dp"
+                            android:layout_height="wrap_content" android:layout_marginStart="4dp"
                             android:text="生成" android:textSize="12sp"
                             android:minWidth="0dp" android:minHeight="0dp" android:padding="8dp" />
                     </LinearLayout>
@@ -144,26 +144,6 @@
                         android:text="音色 (voice)" android:textSize="12sp" android:textColor="@color/secondaryText" />
                     <Spinner android:id="@+id/spinner_voice" android:layout_width="match_parent"
                         android:layout_height="wrap_content" android:layout_marginBottom="8dp" />
-                    <!-- 预设控制（动态显示） -->
-                    <LinearLayout android:id="@+id/layout_preset" android:layout_width="match_parent"
-                        android:layout_height="wrap_content" android:orientation="vertical"
-                        android:visibility="gone" android:layout_marginTop="4dp">
-                        <View android:layout_width="match_parent" android:layout_height="1dp"
-                            android:background="@color/divider" android:layout_marginBottom="8dp" />
-                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                            android:text="预设控制" android:textSize="14sp" android:textStyle="bold"
-                            android:textColor="@color/primaryText" android:layout_marginBottom="6dp" />
-                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                            android:text="预设" android:textSize="12sp" android:textColor="@color/secondaryText" />
-                        <Spinner android:id="@+id/spinner_preset" android:layout_width="match_parent"
-                            android:layout_height="wrap_content" android:layout_marginBottom="8dp" />
-                        <TextView android:id="@+id/tv_manual_context_label" android:layout_width="wrap_content"
-                            android:layout_height="wrap_content" android:text="手动提示词"
-                            android:textSize="12sp" android:textColor="@color/secondaryText" android:visibility="gone" />
-                        <EditText android:id="@+id/et_manual_context" android:layout_width="match_parent"
-                            android:layout_height="wrap_content" android:textSize="13sp"
-                            android:minLines="3" android:visibility="gone" android:layout_marginBottom="8dp" />
-                    </LinearLayout>
 
                     <!-- 插件自定义控件（动态渲染 onLoadUI 的控件树） -->
                     <LinearLayout android:id="@+id/layout_plugin_ui" android:layout_width="match_parent"

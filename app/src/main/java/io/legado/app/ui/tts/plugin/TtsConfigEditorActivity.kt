@@ -37,7 +37,6 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
     private var mediaPlayer: MediaPlayer? = null
     private var localeOptions: List<JReadVoicePluginRuntime.LocaleOption> = emptyList()
     private var voiceOptions: List<JReadVoicePluginRuntime.VoiceOption> = emptyList()
-    private var presetOptions: List<JReadVoicePluginRuntime.PluginPresetOption> = emptyList()
     private var pluginDataFields = mutableMapOf<String, String>()
     private var editorSession: PluginEditorSession? = null
 
@@ -75,10 +74,6 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         }
         binding.spinnerLocale.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: android.widget.AdapterView<*>?, v: View?, position: Int, id: Long) { onLocaleSelected(position) }
-            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
-        }
-        binding.spinnerPreset.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: android.widget.AdapterView<*>?, v: View?, position: Int, id: Long) { onPresetSelected(position) }
             override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
         }
         binding.spinnerVoice.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
@@ -164,8 +159,7 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
             binding.layoutPluginUi.visibility = View.GONE
             binding.spinnerLocale.visibility = View.GONE
             binding.etLocale.visibility = View.VISIBLE
-            binding.layoutPreset.visibility = View.GONE
-            localeOptions = emptyList(); voiceOptions = emptyList(); presetOptions = emptyList()
+            localeOptions = emptyList(); voiceOptions = emptyList()
             return
         }
         binding.spinnerLocale.visibility = View.VISIBLE
@@ -189,8 +183,6 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
                 val localeIdx = localeOptions.indexOfFirst { it.id == currentLocale || it.name == currentLocale }
                 if (localeIdx >= 0) binding.spinnerLocale.setSelection(localeIdx)
             }
-            if (plugin.code.contains("getRulePresets")) loadPresetOptions(plugin)
-            else binding.layoutPreset.visibility = View.GONE
         }
     }
 
@@ -273,37 +265,6 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         } else { binding.etLocale.text.toString().trim().ifBlank { "zh-CN" } }
         lifecycleScope.launch {
             session.onVoiceChanged(locale, voiceId)
-        }
-    }
-
-    private fun loadPresetOptions(plugin: JReadVoiceEngine.VoicePlugin) {
-        lifecycleScope.launch {
-            presetOptions = withContext(Dispatchers.IO) {
-                runCatching { JReadVoicePluginRuntime.listRulePresetOptions(this@TtsConfigEditorActivity, plugin, buildDataJson()) }.getOrDefault(emptyList())
-            }
-            if (presetOptions.isEmpty()) { binding.layoutPreset.visibility = View.GONE; return@launch }
-            binding.layoutPreset.visibility = View.VISIBLE
-            val presetNames = listOf("手写提示词") + presetOptions.map { it.name }
-            binding.spinnerPreset.adapter = ArrayAdapter(this@TtsConfigEditorActivity, android.R.layout.simple_spinner_dropdown_item, presetNames)
-            val currentIdx = pluginDataFields["clonePresetIndex"]?.toIntOrNull() ?: 0
-            if (currentIdx < presetNames.size) binding.spinnerPreset.setSelection(currentIdx)
-        }
-    }
-
-    private fun onPresetSelected(position: Int) {
-        if (position == 0) {
-            binding.tvManualContextLabel.visibility = View.VISIBLE
-            binding.etManualContext.visibility = View.VISIBLE
-            pluginDataFields["clonePresetIndex"] = "0"
-            pluginDataFields["clonePresetName"] = "手写提示词"
-            binding.etManualContext.setText(pluginDataFields["contextTexts"] ?: pluginDataFields["manualContextTexts"] ?: "")
-        } else {
-            binding.tvManualContextLabel.visibility = View.GONE
-            binding.etManualContext.visibility = View.GONE
-            val preset = presetOptions.getOrNull(position - 1) ?: return
-            pluginDataFields["clonePresetIndex"] = position.toString()
-            pluginDataFields["clonePresetName"] = preset.name
-            pluginDataFields["contextTexts"] = preset.contextText
         }
     }
 
@@ -438,10 +399,6 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
     }
 
     private fun buildDataJson(): String {
-        if (binding.etManualContext.visibility == View.VISIBLE) {
-            pluginDataFields["contextTexts"] = binding.etManualContext.text.toString()
-            pluginDataFields["manualContextTexts"] = binding.etManualContext.text.toString()
-        }
         val obj = JSONObject()
         pluginDataFields.forEach { (k, v) -> obj.put(k, v) }
         return obj.toString()

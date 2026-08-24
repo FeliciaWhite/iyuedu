@@ -141,6 +141,31 @@ class App : Application() {
             initDefaultAiImageTemplate()
             //激活转发器对应的TTS引擎
             TtsEngineActivator.activateOnAppInit()
+            //APP 启动时保存一次 fayinren.json（启用项的 voiceTag 列表），与 TtsPluginActivity 的写入逻辑一致
+            exportEnabledTagsOnAppInit(this@App)
+        }
+    }
+
+    /**
+     * APP 启动时异步把启用项的 voiceTag 写入 fayinren.json。
+     * 逻辑与 TtsPluginActivity.exportEnabledTagsNow 保持一致，目录：Download/chajian/mingwuyan。
+     */
+    private fun exportEnabledTagsOnAppInit(context: Context) {
+        Coroutine.async {
+            try {
+                val configs = io.legado.app.help.audiobook.JReadVoiceEngine.listConfigs(context, ensureBuiltIns = true)
+                val tags = configs.filter { it.enabled }
+                    .map { it.voiceTag }
+                    .filter { it.isNotBlank() }
+                    .distinct()
+                    .sorted()
+                val json = org.json.JSONArray(tags).toString(2)
+                val dir = java.io.File("/storage/emulated/0/Download/chajian/mingwuyan")
+                if (!dir.exists()) dir.mkdirs()
+                java.io.File(dir, "fayinren.json").writeText(json)
+            } catch (e: Exception) {
+                // 忽略写入错误（可能没有存储权限或尚未初始化）
+            }
         }
     }
 

@@ -8,6 +8,7 @@ import android.text.InputType
 import android.text.TextWatcher
 import android.util.TypedValue
 import android.view.View
+import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
@@ -97,6 +98,11 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         binding.spinnerVoice.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: android.widget.AdapterView<*>?, v: View?, position: Int, id: Long) { onVoiceSelected(position) }
             override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
+        }
+        // 接管音色下拉：直接点选择框弹出带搜索框的弹窗，而不是原生下拉
+        binding.spinnerVoice.setOnTouchListener { _, event ->
+            if (event.action == android.view.MotionEvent.ACTION_UP) showVoiceSearchDialog()
+            true
         }
     }
 
@@ -257,7 +263,7 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
                 binding.spinnerVoice.adapter = ArrayAdapter(this@TtsConfigEditorActivity, android.R.layout.simple_spinner_dropdown_item, listOf("无可用音色"))
                 toastOnUi("该分类无可用音色")
             } else {
-                val voiceNames = voiceOptions.map { "${it.name.ifBlank { it.id }} (${it.id})" }
+                val voiceNames = voiceOptions.map { it.name.ifBlank { it.id } }
                 binding.spinnerVoice.adapter = ArrayAdapter(this@TtsConfigEditorActivity, android.R.layout.simple_spinner_dropdown_item, voiceNames)
                 // 恢复当前选中的音色
                 val currentVoice = config.voice
@@ -273,6 +279,93 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         // 切换发音人时强制同步显示名称；之后用户可随意手改，直到下次切换发言人才再覆盖
         binding.etDisplayName.setText(voice.name.ifBlank { voice.id })
         notifyVoiceChanged(voice.id)
+    }
+
+    // 通用：带搜索框的单行列表弹窗。items 为显示文本（顺序即原始索引）。
+    // 点击时 onPick 收到的 position 即 items 中的原始索引。
+    private fun showSearchListDialog(
+        title: String,
+        hint: String,
+        items: List<String>,
+        onPick: (originalIndex: Int) -> Unit,
+    ) {
+        val context = this@TtsConfigEditorActivity
+        val container = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(32, 24, 32, 8)
+        }
+        val searchInput = EditText(context).apply {
+            this.hint = hint
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+            setSingleLine(true)
+            setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14f)
+        }
+        val listView = ListView(context).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                resources.displayMetrics.heightPixels / 2,
+            )
+        }
+        container.addView(searchInput)
+        container.addView(listView)
+
+        val shown = mutableListOf<Int>() // 当前显示的原始索引
+        val adapter = object : android.widget.BaseAdapter() {
+            override fun getCount(): Int = shown.size
+            override fun getItem(position: Int): Any = shown[position]
+            override fun getItemId(position: Int): Long = position.toLong()
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                // 复用系统 simple_list_item_1，自动跟随主题文字颜色（深/浅色）
+                val textView = if (convertView is android.widget.TextView) convertView
+                else android.view.LayoutInflater.from(context)
+                    .inflate(android.R.layout.simple_list_item_1, parent, false) as android.widget.TextView
+                textView.setSingleLine(true)
+                textView.ellipsize = null
+                textView.setHorizontallyScrolling(false)
+                textView.text = items[shown[position]]
+                return textView
+            }
+        }
+        listView.adapter = adapter
+
+        fun applyFilter(keyword: String) {
+            val kw = keyword.trim()
+            shown.clear()
+            items.forEachIndexed { idx, name ->
+                if (kw.isEmpty() || name.contains(kw, ignoreCase = true)) shown.add(idx)
+            }
+            adapter.notifyDataSetChanged()
+        }
+        applyFilter("")
+
+        val dialog = android.app.AlertDialog.Builder(context)
+            .setTitle("$title (${items.size})")
+            .setView(container)
+            .setNegativeButton("取消", null)
+            .show()
+
+        listView.setOnItemClickListener { _, _, position, _ ->
+            val originalIndex = shown.getOrNull(position) ?: return@setOnItemClickListener
+            onPick(originalIndex)
+            dialog.dismiss()
+        }
+
+        searchInput.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                applyFilter(s?.toString() ?: "")
+            }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+    }
+
+    private fun showVoiceSearchDialog() {
+        if (voiceOptions.isEmpty()) { toastOnUi("请先选择插件和分类"); return }
+        val voiceNames = voiceOptions.map { it.name.ifBlank { it.id } }
+        showSearchListDialog("选择音色", "搜索音色", voiceNames) { originalIndex ->
+            onVoiceSelected(originalIndex)
+            binding.spinnerVoice.setSelection(originalIndex)
+        }
     }
 
     private fun notifyVoiceChanged(voiceId: String) {
@@ -343,48 +436,9 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         lifecycleScope.launch {
             val allTags = withContext(Dispatchers.IO) { JReadVoiceEngine.listConfigs(this@TtsConfigEditorActivity).map { it.voiceTag }.distinct().sorted() }
             if (allTags.isEmpty()) { toastOnUi("暂无可用标签"); return@launch }
-            val context = this@TtsConfigEditorActivity
-            val container = LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(32, 24, 32, 8)
+            showSearchListDialog("选择标签", "搜索标签", allTags) { originalIndex ->
+                binding.etVoiceTag.setText(allTags[originalIndex])
             }
-            val searchInput = EditText(context).apply {
-                hint = "搜索标签"
-                inputType = android.text.InputType.TYPE_CLASS_TEXT
-                setSingleLine(true)
-                setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14f)
-            }
-            val listView = ListView(context).apply {
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    resources.displayMetrics.heightPixels / 2,
-                )
-            }
-            container.addView(searchInput)
-            container.addView(listView)
-
-            val adapter = android.widget.ArrayAdapter(context, android.R.layout.simple_list_item_1, allTags)
-            listView.adapter = adapter
-
-            val dialog = android.app.AlertDialog.Builder(context)
-                .setTitle("选择标签 (${allTags.size})")
-                .setView(container)
-                .setNegativeButton("取消", null)
-                .show()
-
-            listView.setOnItemClickListener { _, _, position, _ ->
-                val tag = adapter.getItem(position) ?: return@setOnItemClickListener
-                binding.etVoiceTag.setText(tag)
-                dialog.dismiss()
-            }
-
-            searchInput.addTextChangedListener(object : android.text.TextWatcher {
-                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                    adapter.filter.filter(s)
-                }
-                override fun afterTextChanged(s: android.text.Editable?) {}
-            })
         }
     }
 
@@ -467,6 +521,7 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
                     lifecycleScope.launch {
                         withContext(Dispatchers.IO) { JReadVoiceEngine.saveConfig(this@TtsConfigEditorActivity, saved) }
                         toastOnUi("已保存: ${saved.voiceTag}")
+                        setResult(RESULT_OK)
                         finish()
                     }
                 }

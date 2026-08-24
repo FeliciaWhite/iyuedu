@@ -736,11 +736,18 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
             val allConfigsNow = withContext(Dispatchers.IO) {
                 JReadVoiceEngine.listConfigs(this@TtsPluginActivity, ensureBuiltIns = false)
             }
-            // 目标大分组：所有出现过的 groupName（大分组级），排除自身
-            val targetGroups = allConfigsNow
+            // 目标大分组：配置中出现过的大分组名 ∪ 分组记录中的大分组（含空分组），排除自身
+            // 否则空大分组（只有 VoiceGroup 记录、无配置项）无法作为目标，造成死循环。
+            val configGroups = allConfigsNow
                 .map { it.groupName.ifBlank { "默认分组" } }
-                .distinct()
+                .toSet()
+            val recordGroups = allGroups
+                .filter { it.subGroupName.isBlank() && it.thirdGroupName.isBlank() }
+                .map { it.groupName.ifBlank { "默认分组" } }
+                .toSet()
+            val targetGroups = (configGroups + recordGroups)
                 .filter { it != srcGroup }
+                .distinct()
             if (targetGroups.isEmpty()) {
                 toastOnUi("没有其他大分组可作为目标")
                 return@launch
@@ -761,6 +768,8 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
     private fun doConvertGroupToSub(srcGroup: String, targetGroup: String, allConfigsNow: List<JReadVoiceEngine.VoiceConfig>) {
         lifecycleScope.launch {
             withContext(Dispatchers.IO) {
+                // 把显示值还原为真实存储值（"默认分组" → ""），避免把字面量写入 groupName
+                val realTargetGroup = if (targetGroup == "默认分组") "" else targetGroup
                 // srcGroup 下所有配置项整体迁入 targetGroup，子分组名前插 srcGroup
                 val updated = allConfigsNow.map { c ->
                     if (c.groupName.ifBlank { "默认分组" } == srcGroup) {
@@ -768,7 +777,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                             append(srcGroup)
                             if (c.subGroupName.isNotBlank()) append("/").append(c.subGroupName)
                         }
-                        c.copy(groupName = targetGroup, subGroupName = newSub)
+                        c.copy(groupName = realTargetGroup, subGroupName = newSub)
                     } else c
                 }
                 JReadVoiceEngine.saveConfigsBatch(this@TtsPluginActivity, updated)

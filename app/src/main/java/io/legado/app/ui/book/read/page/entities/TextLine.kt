@@ -290,7 +290,12 @@ data class TextLine(
             paint.wordSpacing = wordSpacing
         }
         val offsetX = if (atLeastApi35) letterSpacingHalf else extraLetterSpacingOffsetX
-        canvas.drawText(text, indentSize, text.length, startX + offsetX, lineBase - lineTop, paint)
+        // 安卓 16 (API 36) 的 BaseCanvas.drawText 对越界的 start/end 会抛 IndexOutOfBoundsException，
+        // 这里将绘制区间钳制到合法范围，避免 indentSize 异常时崩溃（如重排后 text 被截断）。
+        val drawStart = indentSize.coerceAtLeast(0).coerceAtMost(text.length)
+        if (text.length > drawStart) {
+            canvas.drawText(text, drawStart, text.length, startX + offsetX, lineBase - lineTop, paint)
+        }
         PaintPool.recycle(paint)
         for (i in columns.indices) {
             val column = columns[i] as TextColumn

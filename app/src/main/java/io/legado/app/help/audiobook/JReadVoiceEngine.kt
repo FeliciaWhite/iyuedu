@@ -1983,6 +1983,16 @@ object JReadVoiceEngine {
             .apply()
     }
 
+    /**
+     * 按 id 集合一次性删除多条配置，仅全量写盘一次（避免逐条 deleteConfig 的 N 次全量读写）。
+     * 返回被删除后剩余的配置列表。
+     */
+    fun deleteConfigs(context: Context, ids: Set<String>): List<VoiceConfig> {
+        val remaining = listConfigs(context).filterNot { ids.contains(it.id) }
+        saveConfigs(context, remaining)
+        return remaining
+    }
+
     private fun voiceConfigToJson(config: VoiceConfig): JSONObject {
         return JSONObject()
             .put("id", config.id)

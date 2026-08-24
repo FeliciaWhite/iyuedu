@@ -401,6 +401,23 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
         scheduleExportEnabledTags()
     }
 
+    /**
+     * 仅重读列表数据（groups/configs/plugins 各读盘一次），不执行 ensureBuiltIn 也不写 fayinren.json。
+     * 用于仅改动分组/插件元信息、configs 内容不变的轻量场景。
+     */
+    private fun reloadListsLight() {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                allConfigs = JReadVoiceEngine.listConfigs(this@TtsPluginActivity)
+                allGroups = JReadVoiceEngine.listGroups(this@TtsPluginActivity)
+                allPlugins = JReadVoiceEngine.listPlugins(this@TtsPluginActivity)
+                pluginsMap = allPlugins.associateBy { it.id }
+            }
+            if (currentTab == TAB_CONFIGS) adapter.setPluginsMap(pluginsMap)
+            rebuildRows()
+        }
+    }
+
     // 后台写 fayinren.json 的串行标记：多次调用只保证"最终基于最新内存写一次"，避免快速连点堆积 I/O
     @Volatile
     private var exportTagsPending = false
@@ -440,8 +457,12 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                         val updated = if (subGroupName == null) toUpdate.map { it.copy(groupName = newName) }
                         else toUpdate.map { it.copy(subGroupName = newName) }
                         JReadVoiceEngine.saveConfigsBatch(this@TtsPluginActivity, updated)
+                        // 同步内存，避免 loadData() 全量重载
+                        val updateIds = toUpdate.map { it.id }.toSet()
+                        allConfigs = configs.map { if (updateIds.contains(it.id)) it.copy(groupName = if (subGroupName == null) newName else it.groupName, subGroupName = if (subGroupName == null) it.subGroupName else newName) else it }
                     }
-                    toastOnUi("已重命名"); loadData()
+                    toastOnUi("已重命名")
+                    refreshListLight()
                 }
             }
             cancelButton()
@@ -454,16 +475,20 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
             yesButton {
                 lifecycleScope.launch {
                     withContext(Dispatchers.IO) {
-                        // 删除该分组下所有配置
+                        // 一次性读盘，算出该分组下所有配置 id，仅全量写盘一次（避免逐条 deleteConfig 的 N 次全量读写）
                         val configs = JReadVoiceEngine.listConfigs(this@TtsPluginActivity)
-                        configs.filter { c ->
+                        val deleteIds = configs.filter { c ->
                             c.groupName.ifBlank { "默认分组" } == groupName &&
                             (subGroupName == null || c.subGroupName.ifBlank { "默认" } == subGroupName)
-                        }.forEach { JReadVoiceEngine.deleteConfig(this@TtsPluginActivity, it.id) }
+                        }.map { it.id }.toSet()
+                        allConfigs = JReadVoiceEngine.deleteConfigs(this@TtsPluginActivity, deleteIds)
                         // 删除分组记录本身
                         JReadVoiceEngine.deleteGroup(this@TtsPluginActivity, groupName, subGroupName)
+                        // 同步内存中的分组列表，避免界面残留空分组头（不重新 loadData）
+                        allGroups = JReadVoiceEngine.listGroups(this@TtsPluginActivity)
                     }
-                    toastOnUi("已删除分组"); loadData()
+                    toastOnUi("已删除分组")
+                    refreshListLight()
                 }
             }
             noButton()
@@ -486,8 +511,11 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                                 (subGroupName == null || c.subGroupName.ifBlank { "默认" } == subGroupName)
                             }.map { it.copy(pluginId = newPlugin.id) }
                             JReadVoiceEngine.saveConfigsBatch(this@TtsPluginActivity, toUpdate)
+                            val updateIds = toUpdate.map { it.id }.toSet()
+                            allConfigs = configs.map { if (updateIds.contains(it.id)) it.copy(pluginId = newPlugin.id) else it }
                         }
-                        toastOnUi("已更换插件为 ${newPlugin.name}"); loadData()
+                        toastOnUi("已更换插件为 ${newPlugin.name}")
+                        refreshListLight()
                     }
                 }.show()
         }
@@ -540,7 +568,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                     JReadVoiceEngine.saveGroups(this@TtsPluginActivity, updated)
                 }
             }
-            loadData()
+            reloadListsLight()
         }
     }
 
@@ -582,7 +610,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                             )
                             JReadVoiceEngine.saveGroup(this@TtsPluginActivity, updated)
                         }
-                        toastOnUi("已更新音频调节"); loadData()
+                        toastOnUi("已更新音频调节"); reloadListsLight()
                     }
                 }
                 cancelButton()
@@ -635,7 +663,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                     withContext(Dispatchers.IO) {
                         JReadVoiceEngine.saveGroup(this@TtsPluginActivity, JReadVoiceEngine.VoiceGroup(groupName = groupName, subGroupName = subGroupName))
                     }
-                    toastOnUi("已新增分组: $groupName"); loadData()
+                    toastOnUi("已新增分组: $groupName"); reloadListsLight()
                 }
             }
             cancelButton()
@@ -720,7 +748,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                     )
                     lifecycleScope.launch {
                         withContext(Dispatchers.IO) { JReadVoiceEngine.savePlugin(this@TtsPluginActivity, newPlugin) }
-                        toastOnUi("已新增插件: $name"); loadData()
+                        toastOnUi("已新增插件: $name"); reloadListsLight()
                     }
                 }
                 cancelButton()
@@ -760,7 +788,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                 val updated = plugin.copy(userVarsJson = merged.toString(), code = code)
                 lifecycleScope.launch {
                     withContext(Dispatchers.IO) { JReadVoiceEngine.savePlugin(this@TtsPluginActivity, updated) }
-                    toastOnUi("已保存插件: ${plugin.name}"); loadData()
+                    toastOnUi("已保存插件: ${plugin.name}"); reloadListsLight()
                 }
             }
             cancelButton()
@@ -774,7 +802,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
     private fun deletePlugin(plugin: JReadVoiceEngine.VoicePlugin) {
         lifecycleScope.launch {
             withContext(Dispatchers.IO) { JReadVoiceEngine.deletePlugin(this@TtsPluginActivity, plugin.id) }
-            toastOnUi("已删除插件: ${plugin.name}"); loadData()
+            toastOnUi("已删除插件: ${plugin.name}"); reloadListsLight()
         }
     }
 
@@ -852,7 +880,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                 val speed = sbSpeed.progress / 100f; val volume = sbVol.progress / 100f; val pitch = sbPitch.progress / 100f
                 lifecycleScope.launch {
                     withContext(Dispatchers.IO) { JReadVoiceEngine.updatePluginAudioParams(this@TtsPluginActivity, plugin, speed, volume, pitch) }
-                    toastOnUi("已更新音频参数"); loadData()
+                    toastOnUi("已更新音频参数"); reloadListsLight()
                 }
             }
             cancelButton()
@@ -868,7 +896,8 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                     when (currentTab) {
                         TAB_CONFIGS -> {
                             val text = bytes.toString(Charsets.UTF_8)
-                            JReadVoiceEngine.importConfigsFromJson(this@TtsPluginActivity, text)
+                            // 使用稳定 id + 一次性写盘（避免逐条 saveConfig 的 N 次全量写盘导致导入卡顿）
+                            JReadVoiceEngine.importConfigsFromJson(this@TtsPluginActivity, text, useStableId = true)
                         }
                         TAB_PLUGINS -> JReadVoiceEngine.importPluginsFromPackageBytes(this@TtsPluginActivity, bytes)
                         else -> 0

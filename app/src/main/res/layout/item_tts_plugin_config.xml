@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
@@ -101,7 +102,8 @@
         android:padding="5dp"
         android:src="@drawable/ic_play_24dp"
         android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="试听" />
+        android:contentDescription="试听"
+        app:tint="@color/primaryText" />
 
     <ImageView
         android:id="@+id/iv_more"
@@ -110,6 +112,7 @@
         android:padding="5dp"
         android:src="@drawable/ic_more"
         android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="更多" />
+        android:contentDescription="更多"
+        app:tint="@color/primaryText" />
 
 </LinearLayout>

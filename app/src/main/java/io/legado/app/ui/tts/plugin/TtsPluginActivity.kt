@@ -134,6 +134,8 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
             onConfigClick = { config -> openConfigEditor(config.id, false) },
             onConfigPreview = { config -> previewConfig(config) },
             onConfigDelete = { config -> deleteConfig(config) },
+            onConfigCopy = { config -> copyConfig(config) },
+            onConfigExport = { config -> exportConfig(config) },
             onConfigToggle = { config, enabled -> toggleConfig(config, enabled) },
             onGroupToggle = { groupName -> toggleGroup(groupName) },
             onGroupToggleEnabled = { groupName, enabled -> setGroupEnabled(groupName, null, enabled) },
@@ -141,11 +143,14 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
             onSubGroupToggleEnabled = { groupName, subGroupName, enabled -> setGroupEnabled(groupName, subGroupName, enabled) },
             onGroupRename = { groupName, subGroupName -> showRenameDialog(groupName, subGroupName) },
             onGroupDelete = { groupName, subGroupName -> showDeleteGroupDialog(groupName, subGroupName) },
+            onGroupCopy = { groupName, subGroupName -> copyGroup(groupName, subGroupName) },
+            onGroupDeleteEnabled = { groupName, subGroupName -> deleteGroupEnabledDisabled(groupName, subGroupName, enabled = true) },
+            onGroupDeleteDisabled = { groupName, subGroupName -> deleteGroupEnabledDisabled(groupName, subGroupName, enabled = false) },
             onGroupReplacePlugin = { groupName, subGroupName -> showReplacePluginDialog(groupName, subGroupName) },
-            onGroupOrganizeTags = { _, _ -> showOrganizeTagsDialog() },
+            onGroupOrganizeTags = { groupName, subGroupName -> showOrganizeTagsDialog(groupName, subGroupName) },
             onGroupAudioParams = { groupName, subGroupName -> showGroupAudioParamsDialog(groupName, subGroupName) },
-            onGroupMoveUp = { groupName, subGroupName -> moveGroup(groupName, subGroupName, up = true) },
-            onGroupMoveDown = { groupName, subGroupName -> moveGroup(groupName, subGroupName, up = false) },
+            onGroupConvertToSub = { groupName -> convertGroupToSub(groupName) },
+            onGroupConvertToGroup = { groupName, subGroupName -> convertSubToGroup(groupName, subGroupName) },
             onPluginClick = { plugin -> showPluginOptions(plugin) },
             onPluginEdit = { plugin -> showPluginEditor(plugin) },
             onPluginToggle = { plugin, enabled -> togglePlugin(plugin, enabled) },
@@ -460,6 +465,26 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                         // 同步内存，避免 loadData() 全量重载
                         val updateIds = toUpdate.map { it.id }.toSet()
                         allConfigs = configs.map { if (updateIds.contains(it.id)) it.copy(groupName = if (subGroupName == null) newName else it.groupName, subGroupName = if (subGroupName == null) it.subGroupName else newName) else it }
+                        // 删除原分组对应的 VoiceGroup 记录，避免残留空分组（新名字会在 upsertGroup 时自动生成记录）
+                        // 注意：row 传入的 groupName/subGroupName 是显示值（"默认分组"/"默认"），
+                        // 而存储里真实值是空串，因此用真实存储值精确匹配，避免 ifBlank 比较遗漏。
+                        val realGroupKey = if (groupName == "默认分组") "" else groupName
+                        val realSubKey = subGroupName?.let { if (it == "默认") "" else it }
+                        val groups = JReadVoiceEngine.listGroups(this@TtsPluginActivity).toMutableList()
+                        if (subGroupName == null) {
+                            groups.removeAll {
+                                it.groupName == realGroupKey &&
+                                it.subGroupName.isBlank() && it.thirdGroupName.isBlank()
+                            }
+                        } else {
+                            groups.removeAll {
+                                it.groupName == realGroupKey &&
+                                it.subGroupName == realSubKey
+                            }
+                        }
+                        JReadVoiceEngine.saveGroups(this@TtsPluginActivity, groups)
+                        // 同步内存中的分组记录，否则界面会残留旧名的空分组（要切走再回来才消失）
+                        allGroups = groups
                     }
                     toastOnUi("已重命名")
                     refreshListLight()
@@ -495,6 +520,133 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
         }
     }
 
+    /**
+     * 复制单个配置：生成新 id（避免与源配置冲突），其余内容完全照搬，
+     * 先写入存储，再以「编辑」方式打开（编辑页按 id 加载并保留 id 保存），
+     * 用户可在编辑页确认/微调。逻辑对齐 TTS Server 的 onCopy（打开副本编辑页）。
+     */
+    private fun copyConfig(config: JReadVoiceEngine.VoiceConfig) {
+        val copy = config.copy(id = java.util.UUID.randomUUID().toString())
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                JReadVoiceEngine.saveConfigsBatch(this@TtsPluginActivity, listOf(copy))
+                allConfigs = JReadVoiceEngine.listConfigs(this@TtsPluginActivity)
+            }
+            toastOnUi("已复制，请在编辑页确认保存")
+            refreshListLight()
+            openConfigEditor(copy.id, isNew = false)
+        }
+    }
+
+    /**
+     * 导出单个配置为 JSON 文件，并通过系统分享/打开。对齐 TTS Server 的 onExport。
+     */
+    private fun exportConfig(config: JReadVoiceEngine.VoiceConfig) {
+        val json = org.json.JSONObject().apply {
+            put("data", org.json.JSONObject().apply {
+                // 把字段平铺到 data 内，与导入格式保持一致（TTS Server 导出即为单个配置对象）
+                put("id", config.id); put("voiceTag", config.voiceTag)
+                put("groupName", config.groupName); put("subGroupName", config.subGroupName)
+                put("thirdGroupName", config.thirdGroupName); put("displayName", config.displayName)
+                put("pluginId", config.pluginId); put("locale", config.locale)
+                put("voice", config.voice); put("previewText", config.previewText)
+                put("data", org.json.JSONObject(config.dataJson))
+                put("speed", config.speed); put("volume", config.volume); put("pitch", config.pitch)
+                put("method", config.method); put("urlTemplate", config.urlTemplate)
+                put("headersText", config.headersText); put("bodyTemplate", config.bodyTemplate)
+                put("responseAudioPath", config.responseAudioPath); put("enabled", config.enabled)
+                put("postSpeed", config.postSpeed); put("postVolume", config.postVolume); put("postPitch", config.postPitch)
+            })
+        }.toString(2)
+        val dir = java.io.File("/storage/emulated/0/Download/chajian/mingwuyan")
+        try {
+            if (!dir.exists()) dir.mkdirs()
+            val safeName = config.displayName.ifBlank { config.voice }.replace(Regex("[\\\\/:*?\"<>|]"), "_").take(40)
+            val file = java.io.File(dir, "tts_config_${safeName}_${config.id.takeLast(6)}.json")
+            file.writeText(json)
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                this, "$packageName.fileProvider", file
+            )
+            val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                type = "application/json"
+                putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(android.content.Intent.createChooser(intent, "导出配置"))
+        } catch (e: Exception) {
+            toastOnUi("导出失败：${e.message}")
+        }
+    }
+
+    /**
+     * 复制分组（含子分组）：源分组下的每个配置都生成新 id 并归入新分组名，
+     * 新分组名追加「副本」后缀。对齐 TTS Server 的 onCopy（分组）。
+     */
+    private fun copyGroup(groupName: String, subGroupName: String?) {
+        val srcGroup = groupName.ifBlank { "默认分组" }
+        val srcSub = subGroupName
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                val configs = JReadVoiceEngine.listConfigs(this@TtsPluginActivity)
+                val matched = configs.filter { c ->
+                    c.groupName.ifBlank { "默认分组" } == srcGroup &&
+                    (srcSub == null || c.subGroupName.ifBlank { "默认" } == srcSub)
+                }
+                if (matched.isEmpty()) return@withContext
+                val newGroupName = if (srcSub == null) "$srcGroup 副本" else srcGroup
+                val newSubName = if (srcSub == null) null else "${srcSub} 副本"
+                val copies = matched.map { c ->
+                    c.copy(
+                        id = java.util.UUID.randomUUID().toString(),
+                        groupName = newGroupName,
+                        subGroupName = newSubName ?: c.subGroupName
+                    )
+                }
+                // 确保新分组记录存在（便于空分组也能显示）
+                if (srcSub == null) {
+                    JReadVoiceEngine.saveGroup(this@TtsPluginActivity, JReadVoiceEngine.VoiceGroup(groupName = newGroupName))
+                } else {
+                    JReadVoiceEngine.saveGroup(this@TtsPluginActivity, JReadVoiceEngine.VoiceGroup(groupName = newGroupName, subGroupName = newSubName ?: ""))
+                }
+                JReadVoiceEngine.saveConfigsBatch(this@TtsPluginActivity, copies)
+                allConfigs = JReadVoiceEngine.listConfigs(this@TtsPluginActivity)
+                allGroups = JReadVoiceEngine.listGroups(this@TtsPluginActivity)
+            }
+            toastOnUi("已复制分组")
+            refreshListLight()
+        }
+    }
+
+    /**
+     * 删除某分组（或子分组）下全部「启用」或「停用」的配置。对齐 TTS Server 的
+     * onDeleteEnabled / onDeleteDisabled。
+     */
+    private fun deleteGroupEnabledDisabled(groupName: String, subGroupName: String?, enabled: Boolean) {
+        val srcGroup = groupName.ifBlank { "默认分组" }
+        val srcSub = subGroupName
+        val label = if (enabled) "启用项" else "停用项"
+        alert("删除确认") {
+            setMessage("确定删除分组「${srcSub ?: srcGroup}」下的全部${label}吗？")
+            yesButton {
+                lifecycleScope.launch {
+                    withContext(Dispatchers.IO) {
+                        val configs = JReadVoiceEngine.listConfigs(this@TtsPluginActivity)
+                        val deleteIds = configs.filter { c ->
+                            c.groupName.ifBlank { "默认分组" } == srcGroup &&
+                            (srcSub == null || c.subGroupName.ifBlank { "默认" } == srcSub) &&
+                            c.enabled == enabled
+                        }.map { it.id }.toSet()
+                        if (deleteIds.isEmpty()) return@withContext
+                        allConfigs = JReadVoiceEngine.deleteConfigs(this@TtsPluginActivity, deleteIds)
+                    }
+                    toastOnUi("已删除${label}")
+                    refreshListLight()
+                }
+            }
+            noButton()
+        }
+    }
+
     private fun showReplacePluginDialog(groupName: String, subGroupName: String?) {
         lifecycleScope.launch {
             val plugins = allPlugins
@@ -521,54 +673,158 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
         }
     }
 
-    private fun showOrganizeTagsDialog() {
-        val modes = arrayOf("仅编号", "仅风格", "编号+风格", "完整重整理")
+    /**
+     * 一键整理标签：对标 TTS Server 的 reassignTagsWithPrefix。
+     * 让用户输入一个前缀，把目标分组（大分组含其下所有项；子分组仅该子分组）下
+     * 的【启用】配置项按列表当前顺序从 01 开始连续编号，voiceTag = 前缀 + 两位序号。
+     */
+    private fun showOrganizeTagsDialog(groupName: String, subGroupName: String?) {
+        val srcGroup = groupName.ifBlank { "默认分组" }
+        val srcSub = subGroupName
+        val input = android.widget.EditText(this).apply {
+            hint = "如：女中 / 男青 / 旁白"
+            setText("")
+        }
         android.app.AlertDialog.Builder(this)
-            .setTitle("一键整理标签").setItems(modes) { _, which -> toastOnUi("整理模式: ${modes[which]}（功能开发中）") }.show()
+            .setTitle("重新分配标签（前缀）")
+            .setMessage("将「${srcSub ?: srcGroup}」下启用项按当前顺序编号")
+            .setView(input)
+            .setPositiveButton("确定") { _, _ ->
+                val prefix = input.text.toString().trim()
+                if (prefix.isEmpty()) { toastOnUi("前缀不能为空"); return@setPositiveButton }
+                reassignTagsWithPrefix(srcGroup, srcSub, prefix)
+            }
+            .setNegativeButton("取消", null)
+            .show()
     }
 
-    private fun moveGroup(groupName: String, subGroupName: String?, up: Boolean) {
+    /**
+     * 按当前列表顺序（sortOrder）对启用项重新连续编号，逻辑对齐 TTS Server reassignTagsWithPrefix。
+     */
+    private fun reassignTagsWithPrefix(groupName: String, subGroupName: String?, prefix: String) {
         lifecycleScope.launch {
             withContext(Dispatchers.IO) {
-                val groups = JReadVoiceEngine.listGroups(this@TtsPluginActivity)
-                if (subGroupName == null) {
-                    // 移动大分组：筛选出大分组级别（subGroupName 为空）
-                    val mainGroups = groups.filter { it.subGroupName.isBlank() && it.thirdGroupName.isBlank() }
-                        .sortedBy { it.sortOrder }
-                    val idx = mainGroups.indexOfFirst { it.groupName == groupName }
-                    if (idx < 0) return@withContext
-                    val swapIdx = if (up) idx - 1 else idx + 1
-                    if (swapIdx < 0 || swapIdx >= mainGroups.size) return@withContext
-                    val a = mainGroups[idx]; val b = mainGroups[swapIdx]
-                    val updated = groups.map { g ->
-                        when (g.id) {
-                            a.id -> g.copy(sortOrder = b.sortOrder)
-                            b.id -> g.copy(sortOrder = a.sortOrder)
-                            else -> g
-                        }
+                val configs = JReadVoiceEngine.listConfigs(this@TtsPluginActivity, ensureBuiltIns = false)
+                val matched = configs.filter { c ->
+                    c.groupName.ifBlank { "默认分组" } == groupName &&
+                    (subGroupName == null || c.subGroupName.ifBlank { "默认" } == subGroupName)
+                }.sortedWith(compareBy({ it.sortOrder }, { it.voiceTag }, { it.displayName }))
+                val enabled = matched.filter { it.enabled }
+                if (enabled.isEmpty()) return@withContext
+                val updated = configs.map { c ->
+                    val idx = enabled.indexOfFirst { it.id == c.id }
+                    if (idx >= 0) c.copy(voiceTag = prefix + String.format("%02d", idx + 1))
+                    else c
+                }
+                JReadVoiceEngine.saveConfigsBatch(this@TtsPluginActivity, updated)
+                allConfigs = JReadVoiceEngine.listConfigs(this@TtsPluginActivity, ensureBuiltIns = false)
+            }
+            toastOnUi("已重新分配标签")
+            refreshListLight()
+        }
+    }
+
+    /**
+     * 大分组 → 子分组：对齐 TTS Server 的 convertToSubGroup。
+     * 选中一个大分组 srcGroup，选一个目标大分组 dstGroup（从所有配置的大分组名派生，排除自己）。
+     * 把 srcGroup 下【所有配置项】（含其下子分组项）整体迁入 dstGroup，
+     * 子分组名变更为 "srcGroup/sub原分组名"（原无子分组的直接为 srcGroup）。
+     */
+    private fun convertGroupToSub(groupName: String) {
+        val srcGroup = groupName.ifBlank { "默认分组" }
+        lifecycleScope.launch {
+            val allConfigsNow = withContext(Dispatchers.IO) {
+                JReadVoiceEngine.listConfigs(this@TtsPluginActivity, ensureBuiltIns = false)
+            }
+            // 目标大分组：所有出现过的 groupName（大分组级），排除自身
+            val targetGroups = allConfigsNow
+                .map { it.groupName.ifBlank { "默认分组" } }
+                .distinct()
+                .filter { it != srcGroup }
+            if (targetGroups.isEmpty()) {
+                toastOnUi("没有其他大分组可作为目标")
+                return@launch
+            }
+            withContext(Dispatchers.Main) {
+                androidx.appcompat.app.AlertDialog.Builder(this@TtsPluginActivity)
+                    .setTitle("转为子分组：选择目标大分组")
+                    .setItems(targetGroups.toTypedArray()) { _, which ->
+                        val target = targetGroups[which]
+                        doConvertGroupToSub(srcGroup, target, allConfigsNow)
                     }
-                    JReadVoiceEngine.saveGroups(this@TtsPluginActivity, updated)
-                } else {
-                    // 移动子分组：筛选出同一大分组下的子分组级别
-                    val subGroups = groups
-                        .filter { it.groupName == groupName && it.subGroupName.isNotBlank() && it.thirdGroupName.isBlank() }
-                        .sortedBy { it.sortOrder }
-                    val idx = subGroups.indexOfFirst { it.subGroupName == subGroupName }
-                    if (idx < 0) return@withContext
-                    val swapIdx = if (up) idx - 1 else idx + 1
-                    if (swapIdx < 0 || swapIdx >= subGroups.size) return@withContext
-                    val a = subGroups[idx]; val b = subGroups[swapIdx]
-                    val updated = groups.map { g ->
-                        when (g.id) {
-                            a.id -> g.copy(sortOrder = b.sortOrder)
-                            b.id -> g.copy(sortOrder = a.sortOrder)
-                            else -> g
+                    .setNegativeButton("取消", null)
+                    .show()
+            }
+        }
+    }
+
+    private fun doConvertGroupToSub(srcGroup: String, targetGroup: String, allConfigsNow: List<JReadVoiceEngine.VoiceConfig>) {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                // srcGroup 下所有配置项整体迁入 targetGroup，子分组名前插 srcGroup
+                val updated = allConfigsNow.map { c ->
+                    if (c.groupName.ifBlank { "默认分组" } == srcGroup) {
+                        val newSub = buildString {
+                            append(srcGroup)
+                            if (c.subGroupName.isNotBlank()) append("/").append(c.subGroupName)
                         }
+                        c.copy(groupName = targetGroup, subGroupName = newSub)
+                    } else c
+                }
+                JReadVoiceEngine.saveConfigsBatch(this@TtsPluginActivity, updated)
+                // 源大分组已迁空，删除其分组记录，避免残留空分组
+                val groups = JReadVoiceEngine.listGroups(this@TtsPluginActivity).toMutableList()
+                groups.removeAll {
+                    it.groupName.ifBlank { "默认分组" } == srcGroup &&
+                    it.subGroupName.isBlank() && it.thirdGroupName.isBlank()
+                }
+                JReadVoiceEngine.saveGroups(this@TtsPluginActivity, groups)
+                allConfigs = JReadVoiceEngine.listConfigs(this@TtsPluginActivity, ensureBuiltIns = false)
+                allGroups = JReadVoiceEngine.listGroups(this@TtsPluginActivity)
+            }
+            toastOnUi("已转为「$targetGroup」的子分组")
+            refreshListLight()
+        }
+    }
+
+    /**
+     * 子分组 → 大分组（B）：把该子分组整体升级为一个【独立】的新大分组。
+     * 这些配置项的 groupName 改为子分组自己的名字（作为新大分组名），
+     * subGroupName 清空，从而脱离原大分组、成为独立大分组。
+     */
+    private fun convertSubToGroup(groupName: String, subGroupName: String) {
+        val srcGroup = groupName.ifBlank { "默认分组" }
+        val srcSub = subGroupName // 原始子分组名（空串表示"默认"子分组）
+        alert("转为大分组") {
+            setMessage("将子分组「$srcSub」从「$srcGroup」中独立出来，成为新的大分组？")
+            yesButton {
+                lifecycleScope.launch {
+                    withContext(Dispatchers.IO) {
+                        val configs = JReadVoiceEngine.listConfigs(this@TtsPluginActivity, ensureBuiltIns = false)
+                        val newGroupName = if (srcSub.isBlank()) "${srcGroup}（独立）" else srcSub
+                        val updated = configs.map { c ->
+                            if (c.groupName.ifBlank { "默认分组" } == srcGroup &&
+                                c.subGroupName == srcSub) {
+                                // 整组脱离原大分组，以子分组名作为新大分组名
+                                c.copy(groupName = newGroupName, subGroupName = "")
+                            } else c
+                        }
+                        JReadVoiceEngine.saveConfigsBatch(this@TtsPluginActivity, updated)
+                        // 删除原子分组的 VoiceGroup 记录，避免残留空子分组（新大分组名会在 upsertGroup 时自动生成记录）
+                        val groups = JReadVoiceEngine.listGroups(this@TtsPluginActivity).toMutableList()
+                        groups.removeAll {
+                            it.groupName.ifBlank { "默认分组" } == srcGroup &&
+                            it.subGroupName == srcSub
+                        }
+                        JReadVoiceEngine.saveGroups(this@TtsPluginActivity, groups)
+                        allConfigs = JReadVoiceEngine.listConfigs(this@TtsPluginActivity, ensureBuiltIns = false)
+                        allGroups = JReadVoiceEngine.listGroups(this@TtsPluginActivity)
                     }
-                    JReadVoiceEngine.saveGroups(this@TtsPluginActivity, updated)
+                    toastOnUi("已转为独立大分组「${if (srcSub.isBlank()) "${srcGroup}（独立）" else srcSub}」")
+                    refreshListLight()
                 }
             }
-            reloadListsLight()
+            noButton()
         }
     }
 

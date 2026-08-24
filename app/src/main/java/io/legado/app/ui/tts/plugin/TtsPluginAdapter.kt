@@ -21,6 +21,8 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     private var onConfigPreview: ((JReadVoiceEngine.VoiceConfig) -> Unit)? = null
     private var onConfigDelete: ((JReadVoiceEngine.VoiceConfig) -> Unit)? = null
     private var onConfigToggle: ((JReadVoiceEngine.VoiceConfig, Boolean) -> Unit)? = null
+    private var onConfigCopy: ((JReadVoiceEngine.VoiceConfig) -> Unit)? = null
+    private var onConfigExport: ((JReadVoiceEngine.VoiceConfig) -> Unit)? = null
     private var onGroupToggle: ((String) -> Unit)? = null
     private var onGroupToggleEnabled: ((String, Boolean) -> Unit)? = null
     private var onSubGroupToggle: ((String, String) -> Unit)? = null
@@ -30,8 +32,11 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     private var onGroupReplacePlugin: ((String, String?) -> Unit)? = null
     private var onGroupOrganizeTags: ((String, String?) -> Unit)? = null
     private var onGroupAudioParams: ((String, String?) -> Unit)? = null
-    private var onGroupMoveUp: ((String, String?) -> Unit)? = null
-    private var onGroupMoveDown: ((String, String?) -> Unit)? = null
+    private var onGroupCopy: ((String, String?) -> Unit)? = null
+    private var onGroupDeleteEnabled: ((String, String?) -> Unit)? = null
+    private var onGroupDeleteDisabled: ((String, String?) -> Unit)? = null
+    private var onGroupConvertToSub: ((String) -> Unit)? = null
+    private var onGroupConvertToGroup: ((String, String) -> Unit)? = null
     private var onPluginClick: ((JReadVoiceEngine.VoicePlugin) -> Unit)? = null
     private var onPluginEdit: ((JReadVoiceEngine.VoicePlugin) -> Unit)? = null
     private var onPluginToggle: ((JReadVoiceEngine.VoicePlugin, Boolean) -> Unit)? = null
@@ -236,6 +241,8 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         onConfigClick: ((JReadVoiceEngine.VoiceConfig) -> Unit)? = null,
         onConfigPreview: ((JReadVoiceEngine.VoiceConfig) -> Unit)? = null,
         onConfigDelete: ((JReadVoiceEngine.VoiceConfig) -> Unit)? = null,
+        onConfigCopy: ((JReadVoiceEngine.VoiceConfig) -> Unit)? = null,
+        onConfigExport: ((JReadVoiceEngine.VoiceConfig) -> Unit)? = null,
         onConfigToggle: ((JReadVoiceEngine.VoiceConfig, Boolean) -> Unit)? = null,
         onGroupToggle: ((String) -> Unit)? = null,
         onGroupToggleEnabled: ((String, Boolean) -> Unit)? = null,
@@ -246,8 +253,11 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         onGroupReplacePlugin: ((String, String?) -> Unit)? = null,
         onGroupOrganizeTags: ((String, String?) -> Unit)? = null,
         onGroupAudioParams: ((String, String?) -> Unit)? = null,
-        onGroupMoveUp: ((String, String?) -> Unit)? = null,
-        onGroupMoveDown: ((String, String?) -> Unit)? = null,
+        onGroupCopy: ((String, String?) -> Unit)? = null,
+        onGroupDeleteEnabled: ((String, String?) -> Unit)? = null,
+        onGroupDeleteDisabled: ((String, String?) -> Unit)? = null,
+        onGroupConvertToSub: ((String) -> Unit)? = null,
+        onGroupConvertToGroup: ((String, String) -> Unit)? = null,
         onPluginClick: ((JReadVoiceEngine.VoicePlugin) -> Unit)? = null,
         onPluginEdit: ((JReadVoiceEngine.VoicePlugin) -> Unit)? = null,
         onPluginToggle: ((JReadVoiceEngine.VoicePlugin, Boolean) -> Unit)? = null,
@@ -256,12 +266,15 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     ) {
         this.onConfigClick = onConfigClick; this.onConfigPreview = onConfigPreview
         this.onConfigDelete = onConfigDelete; this.onConfigToggle = onConfigToggle
+        this.onConfigCopy = onConfigCopy; this.onConfigExport = onConfigExport
         this.onGroupToggle = onGroupToggle; this.onGroupToggleEnabled = onGroupToggleEnabled
         this.onSubGroupToggle = onSubGroupToggle; this.onSubGroupToggleEnabled = onSubGroupToggleEnabled
         this.onGroupRename = onGroupRename; this.onGroupDelete = onGroupDelete
         this.onGroupReplacePlugin = onGroupReplacePlugin; this.onGroupOrganizeTags = onGroupOrganizeTags
         this.onGroupAudioParams = onGroupAudioParams
-        this.onGroupMoveUp = onGroupMoveUp; this.onGroupMoveDown = onGroupMoveDown
+        this.onGroupCopy = onGroupCopy; this.onGroupDeleteEnabled = onGroupDeleteEnabled
+        this.onGroupDeleteDisabled = onGroupDeleteDisabled
+        this.onGroupConvertToSub = onGroupConvertToSub; this.onGroupConvertToGroup = onGroupConvertToGroup
         this.onPluginClick = onPluginClick; this.onPluginEdit = onPluginEdit
         this.onPluginToggle = onPluginToggle; this.onPluginDelete = onPluginDelete
         this.onPluginAudioParams = onPluginAudioParams
@@ -316,15 +329,18 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             ivMore.setOnClickListener {
                 val pm = PopupMenu(itemView.context, ivMore)
                 pm.menu.add("一键整理标签"); pm.menu.add("更换插件")
-                pm.menu.add("音频调节"); pm.menu.add("上移"); pm.menu.add("下移")
+                pm.menu.add("音频调节"); pm.menu.add("转为子分组")
+                pm.menu.add("复制分组"); pm.menu.add("删除启用项"); pm.menu.add("删除停用项")
                 pm.menu.add("重命名分组"); pm.menu.add("删除分组")
                 pm.setOnMenuItemClickListener { item ->
                     when (item.title) {
                         "一键整理标签" -> onGroupOrganizeTags?.invoke(row.groupName, null)
                         "更换插件" -> onGroupReplacePlugin?.invoke(row.groupName, null)
                         "音频调节" -> onGroupAudioParams?.invoke(row.groupName, null)
-                        "上移" -> onGroupMoveUp?.invoke(row.groupName, null)
-                        "下移" -> onGroupMoveDown?.invoke(row.groupName, null)
+                        "转为子分组" -> onGroupConvertToSub?.invoke(row.groupName)
+                        "复制分组" -> onGroupCopy?.invoke(row.groupName, null)
+                        "删除启用项" -> onGroupDeleteEnabled?.invoke(row.groupName, null)
+                        "删除停用项" -> onGroupDeleteDisabled?.invoke(row.groupName, null)
                         "重命名分组" -> onGroupRename?.invoke(row.groupName, null)
                         "删除分组" -> onGroupDelete?.invoke(row.groupName, null)
                     }; true
@@ -347,15 +363,18 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             ivMore.setOnClickListener {
                 val pm = PopupMenu(itemView.context, ivMore)
                 pm.menu.add("一键整理标签"); pm.menu.add("更换插件")
-                pm.menu.add("音频调节"); pm.menu.add("上移"); pm.menu.add("下移")
+                pm.menu.add("音频调节"); pm.menu.add("转为大分组")
+                pm.menu.add("复制分组"); pm.menu.add("删除启用项"); pm.menu.add("删除停用项")
                 pm.menu.add("重命名"); pm.menu.add("删除")
                 pm.setOnMenuItemClickListener { item ->
                     when (item.title) {
                         "一键整理标签" -> onGroupOrganizeTags?.invoke(row.groupName, row.subGroupName)
                         "更换插件" -> onGroupReplacePlugin?.invoke(row.groupName, row.subGroupName)
                         "音频调节" -> onGroupAudioParams?.invoke(row.groupName, row.subGroupName)
-                        "上移" -> onGroupMoveUp?.invoke(row.groupName, row.subGroupName)
-                        "下移" -> onGroupMoveDown?.invoke(row.groupName, row.subGroupName)
+                        "转为大分组" -> onGroupConvertToGroup?.invoke(row.groupName, row.subGroupName)
+                        "复制分组" -> onGroupCopy?.invoke(row.groupName, row.subGroupName)
+                        "删除启用项" -> onGroupDeleteEnabled?.invoke(row.groupName, row.subGroupName)
+                        "删除停用项" -> onGroupDeleteDisabled?.invoke(row.groupName, row.subGroupName)
                         "重命名" -> onGroupRename?.invoke(row.groupName, row.subGroupName)
                         "删除" -> onGroupDelete?.invoke(row.groupName, row.subGroupName)
                     }; true
@@ -400,11 +419,14 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             ivPreview.setOnClickListener { onConfigPreview?.invoke(config) }
             ivMore.setOnClickListener {
                 val pm = PopupMenu(itemView.context, ivMore)
-                pm.menu.add("编辑"); pm.menu.add("试听"); pm.menu.add("删除")
+                pm.menu.add("编辑"); pm.menu.add("试听")
+                pm.menu.add("复制"); pm.menu.add("导出"); pm.menu.add("删除")
                 pm.setOnMenuItemClickListener { item ->
                     when (item.title) {
                         "编辑" -> onConfigClick?.invoke(config)
                         "试听" -> onConfigPreview?.invoke(config)
+                        "复制" -> onConfigCopy?.invoke(config)
+                        "导出" -> onConfigExport?.invoke(config)
                         "删除" -> onConfigDelete?.invoke(config)
                     }; true
                 }

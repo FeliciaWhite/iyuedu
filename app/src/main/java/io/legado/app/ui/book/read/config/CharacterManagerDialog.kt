@@ -718,7 +718,7 @@ class CharacterManagerDialog : DialogFragment() {
         val btnShowCurrent = dialog.findViewById<Button>(R.id.btn_show_current)
         val btnCancel = dialog.findViewById<Button>(R.id.btn_cancel)
 
-        // 自定义适配器：每项右侧带“修改”图标
+        // 自定义适配器：每项右侧带“修改”图标；点击整行（除修改按钮）即恢复该密钥
         val adapter = object : ArrayAdapter<String>(
             requireContext(),
             R.layout.dialog_key_item,
@@ -733,6 +733,17 @@ class CharacterManagerDialog : DialogFragment() {
                 tv.text = name
                 // 恢复原先的正常文字颜色，避免变浅看不清
                 tv.setTextColor(androidx.core.content.ContextCompat.getColor(requireContext(), R.color.primaryText))
+
+                // 点击整行密钥（除“修改”按钮）即恢复该密钥到 miyue.txt 并关闭弹窗
+                view.setOnClickListener {
+                    val key = keyMap.optString(name, "")
+                    writeTxtFile("miyue.txt", key)
+                    saveKeyToPrefs(key)
+                    toast("已恢复密钥: $name")
+                    dialog.dismiss()
+                }
+
+                // “修改”按钮单独处理，覆盖整行点击
                 view.findViewById<ImageButton>(R.id.btn_edit_key).setOnClickListener {
                     dialog.dismiss()
                     modifyKey(name)
@@ -741,16 +752,6 @@ class CharacterManagerDialog : DialogFragment() {
             }
         }
         listView.adapter = adapter
-
-        // 点击密钥恢复（点击名称区域）
-        listView.setOnItemClickListener { _, _, position, _ ->
-            val name = names[position]
-            val key = keyMap.optString(name, "")
-            writeTxtFile("miyue.txt", key)
-            saveKeyToPrefs(key)
-            toast("已恢复密钥: $name")
-            dialog.dismiss()
-        }
 
         // 底部按钮
         btnDelete.setOnClickListener {

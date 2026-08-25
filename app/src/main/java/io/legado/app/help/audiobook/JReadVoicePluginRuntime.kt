@@ -597,6 +597,30 @@ object JReadVoicePluginRuntime {
             .replace("new android.text.TextWatcher(", "new __jreadTextWatcher(")
             // 部分插件用 new TextWatcher(...)（无 android.text. 前缀）
             .replace("new TextWatcher(", "new __jreadTextWatcher(")
+            // 把 X.setOnClickListener(fn) 改写为全局授权函数 __jreadSetOnClickListener(X, fn)，
+            // 让任何插件里的 view.setOnClickListener(fn) 走授权版监听包装，避免点击时经 Rhino
+            // InterfaceAdapter 调 JS 抛 "Not allow run script in unauthorized way"（点击自定义按钮
+            // 崩溃的根因）。注意：__jreadSetOnClickListener 是注入的全局函数，必须以
+            // "__jreadSetOnClickListener(接收者, " 形式调用，不能写成 X.__jreadSetOnClickListener(
+            // （那样会在 View 实例上找方法而失败）。捕获接收者表达式（标识符/this/方法调用/成员链）。
+            .replace(Regex("""(\S+?)\.setOnClickListener\s*\("""), "__jreadSetOnClickListener(\$1, ")
+            // 另外兜底 View.OnClickListener 的 new 写法（部分插件用 new View.OnClickListener({onClick})），
+            // 直接替换为授权版构造器，避免漏网。
+            .replace("new android.view.View.OnClickListener(", "new __jreadViewClickListener(")
+            .replace("new View.OnClickListener(", "new __jreadViewClickListener(")
+            // AlertDialog 系列回调：先处理 new 写法（DialogInterface.OnClickListener /
+            // OnMultiChoiceClickListener），再处理裸函数写法（builder.setXxx(text, function...)）。
+            // 裸函数写法需把方法名改写成全局包装函数并把接收者(builder)作为首个参数传入。
+            .replace("new android.content.DialogInterface.OnClickListener(", "new __jreadDialogClickListener(")
+            .replace("new DialogInterface.OnClickListener(", "new __jreadDialogClickListener(")
+            .replace("new android.content.DialogInterface.OnMultiChoiceClickListener(", "new __jreadDialogMultiChoice(")
+            .replace("new DialogInterface.OnMultiChoiceClickListener(", "new __jreadDialogMultiChoice(")
+            .replace(Regex("""(\S+?)\.setPositiveButton\s*\("""), "__jreadSetPositiveButton(\$1, ")
+            .replace(Regex("""(\S+?)\.setNegativeButton\s*\("""), "__jreadSetNegativeButton(\$1, ")
+            .replace(Regex("""(\S+?)\.setNeutralButton\s*\("""), "__jreadSetNeutralButton(\$1, ")
+            .replace(Regex("""(\S+?)\.setItems\s*\("""), "__jreadSetItems(\$1, ")
+            .replace(Regex("""(\S+?)\.setSingleChoiceItems\s*\("""), "__jreadSetSingleChoiceItems(\$1, ")
+            .replace(Regex("""(\S+?)\.setMultiChoiceItems\s*\("""), "__jreadSetMultiChoiceItems(\$1, ")
     }
 
     fun installPluginCompatShims(scope: Scriptable, context: Context? = null) {
@@ -644,6 +668,122 @@ object JReadVoicePluginRuntime {
                     for (var i = 0; i < keys.length; i++) out.push([keys[i], obj[keys[i]]]);
                     return out;
                 };
+            }
+            // 授权版 View 点击监听器辅助函数（全局函数，供 preparePluginCode 改写后的
+            // "__jreadSetOnClickListener(view, fn)" 调用）。
+            // 插件常用 view.setOnClickListener(function(v){...}) / setOnClickListener(()=>{...})
+            // 注册 JS 函数为点击回调。点击时 Android 经 Rhino InterfaceAdapter 调起 JS，
+            // 但 RhinoContext.allowScriptRun 为 false，会抛 "Not allow run script in unauthorized way"
+            // 导致崩溃（崩溃栈正指向 View.OnClickListener.onClick）。
+            // __jreadSetOnClickListener 把传入的 JS 监听器包一层授权 Context，再委托给
+            // 真实的 View.setOnClickListener。preparePluginCode 会把插件里的
+            // "X.setOnClickListener(" 改写为 "__jreadSetOnClickListener(X, "。
+            function __jreadSetOnClickListener(view, listener) {
+                if (view == null) return;
+                if (listener == null) {
+                    view.setOnClickListener(null);
+                    return;
+                }
+                var wrapped = new Packages.android.view.View.OnClickListener({
+                    onClick: function(v) {
+                        var cx = org.mozilla.javascript.Context.enter();
+                        try {
+                            if (cx instanceof com.script.rhino.RhinoContext) {
+                                cx.allowScriptRun = true;
+                            }
+                            if (typeof listener === 'function') {
+                                listener(v);
+                            } else if (listener.onClick) {
+                                listener.onClick(v);
+                            }
+                        } finally {
+                            if (cx instanceof com.script.rhino.RhinoContext) {
+                                cx.allowScriptRun = false;
+                            }
+                            org.mozilla.javascript.Context.exit();
+                        }
+                    }
+                });
+                view.setOnClickListener(wrapped);
+            }
+            // 通用授权执行器：进入带 allowScriptRun=true 的 Context 执行 fn，结束后还原。
+            function __jreadAuth(fn) {
+                var cx = org.mozilla.javascript.Context.enter();
+                try {
+                    if (cx instanceof com.script.rhino.RhinoContext) {
+                        cx.allowScriptRun = true;
+                    }
+                    return fn();
+                } finally {
+                    if (cx instanceof com.script.rhino.RhinoContext) {
+                        cx.allowScriptRun = false;
+                    }
+                    org.mozilla.javascript.Context.exit();
+                }
+            }
+            // 授权版 View.OnClickListener 构造器（覆盖 new View.OnClickListener({onClick}) 写法）。
+            function __jreadViewClickListener(listener) {
+                return new Packages.android.view.View.OnClickListener({
+                    onClick: function(v) {
+                        __jreadAuth(function() {
+                            if (typeof listener === 'function') {
+                                listener(v);
+                            } else if (listener.onClick) {
+                                listener.onClick(v);
+                            }
+                        });
+                    }
+                });
+            }
+            // 授权版 DialogInterface.OnClickListener（覆盖 setPositiveButton/setNegativeButton/
+            // setNeutralButton/setItems/setSingleChoiceItems 的回调）。支持两种写法：
+            //   1) new DialogInterface.OnClickListener({onClick:function(d,w){...}})
+            //   2) builder.setXxx(text, function(d,w){...}) 的裸函数形式
+            function __jreadDialogClickListener(listener) {
+                return new Packages.android.content.DialogInterface.OnClickListener({
+                    onClick: function(dialog, which) {
+                        __jreadAuth(function() {
+                            if (typeof listener === 'function') {
+                                listener(dialog, which);
+                            } else if (listener.onClick) {
+                                listener.onClick(dialog, which);
+                            }
+                        });
+                    }
+                });
+            }
+            // 授权版 DialogInterface.OnMultiChoiceClickListener（覆盖 setMultiChoiceItems 的回调）。
+            function __jreadDialogMultiChoice(listener) {
+                return new Packages.android.content.DialogInterface.OnMultiChoiceClickListener({
+                    onClick: function(dialog, which, isChecked) {
+                        __jreadAuth(function() {
+                            if (typeof listener === 'function') {
+                                listener(dialog, which, isChecked);
+                            } else if (listener.onClick) {
+                                listener.onClick(dialog, which, isChecked);
+                            }
+                        });
+                    }
+                });
+            }
+            // AlertDialog.Builder 各回调方法的包装：把监听器参数包成授权版再转调原方法。
+            function __jreadSetPositiveButton(builder, text, listener) {
+                builder.setPositiveButton(text, __jreadDialogClickListener(listener));
+            }
+            function __jreadSetNegativeButton(builder, text, listener) {
+                builder.setNegativeButton(text, __jreadDialogClickListener(listener));
+            }
+            function __jreadSetNeutralButton(builder, text, listener) {
+                builder.setNeutralButton(text, __jreadDialogClickListener(listener));
+            }
+            function __jreadSetItems(builder, items, listener) {
+                builder.setItems(items, __jreadDialogClickListener(listener));
+            }
+            function __jreadSetSingleChoiceItems(builder, items, checkedItem, listener) {
+                builder.setSingleChoiceItems(items, checkedItem, __jreadDialogClickListener(listener));
+            }
+            function __jreadSetMultiChoiceItems(builder, items, checkedItems, listener) {
+                builder.setMultiChoiceItems(items, checkedItems, __jreadDialogMultiChoice(listener));
             }
             """.trimIndent(),
                 scope
@@ -1861,7 +2001,12 @@ object JReadVoicePluginRuntime {
 
         fun create(runnable: Any?): PluginThread {
             return PluginThread(runnable).also { thread ->
-                thread.onStart = { tasks.add(thread) }
+                // 保留入队行为以兼容旧用法（drainAll/cancelAll 事件泵），
+                // 同时 start() 内部会真正起后台线程执行任务。
+                thread.onStart = {
+                    tasks.add(thread)
+                    thread.startReal()
+                }
             }
         }
 
@@ -1903,22 +2048,50 @@ object JReadVoicePluginRuntime {
         @Volatile
         private var interrupted = false
 
+        @Volatile
+        private var realThread: Thread? = null
+
         fun start() {
             if (started) return
             started = true
             onStart?.invoke()
         }
 
+        /**
+         * 真正起一个后台线程执行任务。并发合成（如插件的 getAudioWithRotation）
+         * 依赖子线程并行运行 + CountDownLatch 等待，因此这里必须真实起线程，
+         * 而不是仅入队由事件泵兜底执行。
+         */
+        fun startReal() {
+            val t = Thread {
+                runIfNeeded()
+            }
+            t.isDaemon = true
+            realThread = t
+            t.start()
+        }
+
         @JvmOverloads
         fun join(timeoutMs: Long = 0L) {
-            runIfNeeded()
+            val t = realThread
+            if (t != null) {
+                if (timeoutMs > 0L) {
+                    t.join(timeoutMs)
+                } else {
+                    t.join()
+                }
+            } else {
+                // 兼容旧用法：未走 startReal（理论上不会再发生）时退化为同步执行
+                runIfNeeded()
+            }
         }
 
         fun interrupt() {
             interrupted = true
+            realThread?.interrupt()
         }
 
-        fun isAlive(): Boolean = started && !finished && !interrupted
+        fun isAlive(): Boolean = (realThread?.isAlive == true) || (started && !finished && !interrupted)
 
         fun runIfNeeded() {
             if (finished || interrupted) return

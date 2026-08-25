@@ -379,7 +379,20 @@ object RhinoScriptEngine : AbstractScriptEngine(), Invocable, Compilable {
                 try {
                     if (cx is RhinoContext) {
                         if (!cx.allowScriptRun) {
-                            error("Not allow run script in unauthorized way.")
+                            // 框架回调路径（如 View.OnClickListener.onClick、DialogInterface
+                            // 系列回调、Spinner OnItemSelected 等）经 Rhino InterfaceAdapter
+                            // 调 JS 时会走到这里，而此时 allowScriptRun 为 false，导致抛
+                            // "Not allow run script in unauthorized way"。这类回调由 Android
+                            // 系统事件触发，理应允许执行 JS 回调，因此临时授予本次 doTopCall
+                            // 授权，回调结束后恢复原值。这是兼容插件写法的根因修复。
+                            val prev = cx.allowScriptRun
+                            cx.allowScriptRun = true
+                            try {
+                                cx.ensureActive()
+                                return super.doTopCall(callable, cx, scope, thisObj, args)
+                            } finally {
+                                cx.allowScriptRun = prev
+                            }
                         }
                         cx.ensureActive()
                     }

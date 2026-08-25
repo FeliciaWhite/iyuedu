@@ -444,8 +444,14 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
 
     private fun previewConfig() {
         val previewText = binding.etPreviewText.text.toString().trim().ifBlank { toastOnUi("请输入试听文本"); return }
-        val tempConfig = buildConfig() ?: return
-        toastOnUi("正在试听: ${tempConfig.voiceTag}")
+        val tempConfig = buildConfig(requireTag = false) ?: return
+        // 试听的是音色，提示应展示音色名称而非标签
+        val voiceName = if (voiceOptions.isNotEmpty() && binding.spinnerVoice.selectedItemPosition in voiceOptions.indices) {
+            voiceOptions[binding.spinnerVoice.selectedItemPosition].name.ifBlank { voiceOptions[binding.spinnerVoice.selectedItemPosition].id }
+        } else {
+            binding.etDisplayName.text.toString().trim().ifBlank { tempConfig.voice.ifBlank { "当前音色" } }
+        }
+        toastOnUi("正在试听: $voiceName")
         lifecycleScope.launch {
             val requestId = UUID.randomUUID().toString()
             val pointerJson = JSONObject().put("voiceTag", tempConfig.voiceTag).toString()
@@ -475,9 +481,11 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         return obj.toString()
     }
 
-    private fun buildConfig(): JReadVoiceEngine.VoiceConfig? {
+    private fun buildConfig(requireTag: Boolean = true): JReadVoiceEngine.VoiceConfig? {
         val voiceTag = binding.etVoiceTag.text.toString().trim()
-        if (voiceTag.isBlank()) { toastOnUi("voiceTag 不能为空"); return null }
+        // 试听时不需要强制填写标签（标签用于分组标识，与试听音色无关）；
+        // 标签为空时用一个占位，避免下游合成因 voiceTag 为空出问题。
+        if (requireTag && voiceTag.isBlank()) { toastOnUi("voiceTag 不能为空"); return null }
         val pluginIdx = binding.spinnerPlugin.selectedItemPosition
         val selectedPlugin = if (pluginIdx > 0) plugins.getOrNull(pluginIdx - 1) else null
         if (selectedPlugin == null) { toastOnUi("请选择一个插件"); return null }
@@ -488,10 +496,12 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         val locale = if (localeOptions.isNotEmpty() && binding.spinnerLocale.selectedItemPosition < localeOptions.size && binding.spinnerLocale.visibility == View.VISIBLE) {
             localeOptions[binding.spinnerLocale.selectedItemPosition].id
         } else { binding.etLocale.text.toString().trim() }
+        // 试听模式且不填标签时，用音色 id 作为占位，保证下游合成可用
+        val effectiveTag = if (voiceTag.isBlank()) (voice.ifBlank { "preview" }) else voiceTag
         return config.copy(
             id = config.id.ifBlank { UUID.randomUUID().toString() },
             enabled = binding.swEnabled.isChecked,
-            voiceTag = voiceTag,
+            voiceTag = effectiveTag,
             displayName = binding.etDisplayName.text.toString().trim(),
             groupName = binding.etGroup.text.toString().trim(),
             subGroupName = binding.etSubGroup.text.toString().trim(),

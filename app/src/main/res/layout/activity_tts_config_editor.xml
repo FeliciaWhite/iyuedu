@@ -66,9 +66,11 @@
                         android:textColor="@color/primaryText" android:layout_marginTop="4dp" android:layout_marginBottom="6dp" />
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="4dp">
-                        <Spinner android:id="@+id/spinner_gender" android:layout_width="0dp"
+                        <Spinner android:id="@+id/spinner_gender" style="@style/SpinnerBorder"
+                            android:layout_width="0dp"
                             android:layout_height="wrap_content" android:layout_weight="0.8" />
-                        <Spinner android:id="@+id/spinner_age" android:layout_width="0dp"
+                        <Spinner android:id="@+id/spinner_age" style="@style/SpinnerBorder"
+                            android:layout_width="0dp"
                             android:layout_height="wrap_content" android:layout_weight="1.2"
                             android:layout_marginStart="4dp" />
                         <EditText android:id="@+id/et_tag_number" android:layout_width="35dp"
@@ -128,44 +130,23 @@
                         android:textColor="@color/primaryText" android:layout_marginBottom="12dp" />
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:text="声音插件" android:textSize="12sp" android:textColor="@color/secondaryText" />
-                    <Spinner android:id="@+id/spinner_plugin" android:layout_width="match_parent"
+                    <Spinner android:id="@+id/spinner_plugin" style="@style/SpinnerBorder"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content" android:layout_marginBottom="8dp" />
                     <!-- locale: 有插件code时显示Spinner，否则显示EditText -->
                     <TextView android:id="@+id/tv_locale_label" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:text="音色分类 (locale)"
                         android:textSize="12sp" android:textColor="@color/secondaryText" />
-                    <Spinner android:id="@+id/spinner_locale" android:layout_width="match_parent"
+                    <Spinner android:id="@+id/spinner_locale" style="@style/SpinnerBorder"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content" android:layout_marginBottom="8dp" />
                     <EditText android:id="@+id/et_locale" android:layout_width="match_parent"
                         android:layout_height="wrap_content" android:hint="如: zh-CN"
                         android:textSize="14sp" android:visibility="gone" android:layout_marginBottom="8dp" />
-                    <!-- voice: 下拉选择框 -->
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="音色 (voice)" android:textSize="12sp" android:textColor="@color/secondaryText" />
-                    <Spinner android:id="@+id/spinner_voice" android:layout_width="match_parent"
-                        android:layout_height="wrap_content" android:layout_marginBottom="8dp" />
-
-                    <!-- 插件自定义控件（动态渲染 onLoadUI 的控件树） -->
-                    <LinearLayout android:id="@+id/layout_plugin_ui" android:layout_width="match_parent"
-                        android:layout_height="wrap_content" android:orientation="vertical"
-                        android:visibility="gone" android:layout_marginTop="4dp" />
-                </LinearLayout>
-            </androidx.cardview.widget.CardView>
-
-            <!-- 卡片3: 试听 -->
-            <androidx.cardview.widget.CardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                app:cardCornerRadius="8dp"
-                app:cardElevation="2dp">
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="vertical" android:padding="16dp">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="试听" android:textSize="16sp" android:textStyle="bold"
-                        android:textColor="@color/primaryText" android:layout_marginBottom="12dp" />
+                    <!-- 试听（移至音色选择框上方，便于选好音色后直接试听） -->
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:orientation="horizontal" android:gravity="center_vertical">
+                        android:orientation="horizontal" android:gravity="center_vertical"
+                        android:layout_marginBottom="12dp">
                         <EditText android:id="@+id/et_preview_text" android:layout_width="0dp"
                             android:layout_height="wrap_content" android:layout_weight="1"
                             android:hint="输入试听文本..." android:text="你好呀，你吃饭了吗？"
@@ -174,6 +155,17 @@
                             android:layout_height="wrap_content" android:text="试听" android:textSize="12sp"
                             android:minWidth="0dp" android:minHeight="0dp" android:padding="8dp" />
                     </LinearLayout>
+                    <!-- voice: 下拉选择框 -->
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="音色 (voice)" android:textSize="12sp" android:textColor="@color/secondaryText" />
+                    <Spinner android:id="@+id/spinner_voice" style="@style/SpinnerBorder"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" android:layout_marginBottom="8dp" />
+
+                    <!-- 插件自定义控件（动态渲染 onLoadUI 的控件树） -->
+                    <LinearLayout android:id="@+id/layout_plugin_ui" android:layout_width="match_parent"
+                        android:layout_height="wrap_content" android:orientation="vertical"
+                        android:visibility="gone" android:layout_marginTop="4dp" />
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
 

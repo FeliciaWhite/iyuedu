@@ -1,5 +1,6 @@
 package io.legado.app.help.audiobook.plugin
 
+import io.legado.app.R
 import android.annotation.SuppressLint
 import android.content.Context
 import android.view.Gravity
@@ -125,6 +126,12 @@ class JSpinner @JvmOverloads constructor(
         }
         mSpinner = Spinner(ctx).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            // 默认带边框（描边跟随字体色，深浅模式自动切换），插件未自定义背景时生效
+            background = ctx.getDrawable(R.drawable.spinner_border)
+            // 给边框内文字留上下左右间距，避免文字紧贴边框（与界面原生 Spinner 观感一致）
+            val h = (12 * ctx.resources.displayMetrics.density).toInt()
+            val v = (8 * ctx.resources.displayMetrics.density).toInt()
+            setPadding(h, v, h, v)
         }
         container.addView(mLabelView)
         container.addView(mSpinner)

@@ -50,6 +50,11 @@
 
     <style name="Spinner" parent="android:Theme.Holo.Light" />
 
+    <!-- 带边框的 Spinner，描边跟随字体色（浅色/深色自动切换），保留右侧下拉三角 -->
+    <style name="SpinnerBorder" parent="Spinner">
+        <item name="android:background">@drawable/spinner_border</item>
+    </style>
+
     //**********System Style******************//
 
     <style name="Style.NavigationView" parent="android:Widget">

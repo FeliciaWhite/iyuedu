@@ -52,6 +52,10 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
 
     private val importLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri -> uri?.let { doImport(it) } }
     private val exportLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let { doExport(it) } }
+    // 编辑/新增配置保存后回传，父页面据此再保存一次 fayinren.json
+    private val configEditorLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) scheduleExportEnabledTags()
+    }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         binding.recyclerView.setEdgeEffectColor(primaryColor)
@@ -62,6 +66,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
         adapter.onConfigMoved = { orderedIds ->
             lifecycleScope.launch {
                 withContext(Dispatchers.IO) { JReadVoiceEngine.saveConfigsSortOrder(this@TtsPluginActivity, orderedIds) }
+                scheduleExportEnabledTags()
             }
         }
         adapter.onGroupMoved = { orderedGroupNames ->
@@ -76,6 +81,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                     }
                     JReadVoiceEngine.saveGroups(this@TtsPluginActivity, updated)
                 }
+                scheduleExportEnabledTags()
             }
         }
         adapter.onSubGroupMoved = { parentGroupName, orderedSubNames ->
@@ -90,6 +96,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                     }
                     JReadVoiceEngine.saveGroups(this@TtsPluginActivity, updated)
                 }
+                scheduleExportEnabledTags()
             }
         }
         adapter.createItemTouchHelper().attachToRecyclerView(binding.recyclerView)
@@ -330,7 +337,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
     }
 
     private fun openConfigEditor(configId: String?, isNew: Boolean) {
-        startActivity(Intent(this, TtsConfigEditorActivity::class.java).apply {
+        configEditorLauncher.launch(Intent(this, TtsConfigEditorActivity::class.java).apply {
             putExtra(TtsConfigEditorActivity.EXTRA_CONFIG_ID, configId)
             putExtra(TtsConfigEditorActivity.EXTRA_IS_NEW, isNew)
         })
@@ -402,7 +409,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
      * 不再走 loadData()（不读盘、不解析整表、不做内置预设/迁移）。
      */
     private fun refreshListLight() {
-        rebuildRows()
+        if (currentTab == TAB_PLUGINS) rebuildPluginRows() else rebuildRows()
         scheduleExportEnabledTags()
     }
 
@@ -418,8 +425,8 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                 allPlugins = JReadVoiceEngine.listPlugins(this@TtsPluginActivity)
                 pluginsMap = allPlugins.associateBy { it.id }
             }
-            if (currentTab == TAB_CONFIGS) adapter.setPluginsMap(pluginsMap)
-            rebuildRows()
+            adapter.setPluginsMap(pluginsMap)
+            if (currentTab == TAB_PLUGINS) rebuildPluginRows() else rebuildRows()
         }
     }
 

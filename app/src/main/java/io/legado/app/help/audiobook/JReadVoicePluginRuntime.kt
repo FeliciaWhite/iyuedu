@@ -265,7 +265,12 @@ object JReadVoicePluginRuntime {
             Log.i(TAG, "listVoices fallback done: plugin=${plugin.name}, locale=$locale, count=${fallbackOptions.size}")
             return fallbackOptions
         }
-        firstError?.let { Log.w(TAG, "listVoices empty after candidate errors: plugin=${plugin.name}", it) }
+        // 所有候选 locale 都失败，且确有异常发生：抛出首个错误，让上层弹窗，
+        // 避免“加载不出来又不报错”。
+        firstError?.let {
+            Log.w(TAG, "listVoices empty after candidate errors: plugin=${plugin.name}", it)
+            throw it
+        }
         Log.w(TAG, "listVoices empty: plugin=${plugin.name}, locale=$locale, result=${describeJsResult(lastResult)}")
         return emptyList()
     }
@@ -297,7 +302,11 @@ object JReadVoicePluginRuntime {
         val uiObjectName = when {
             ScriptableObject.getProperty(scope, "EditorJS") is ScriptableObject -> "EditorJS"
             ScriptableObject.getProperty(scope, "PluginJS") is ScriptableObject -> "PluginJS"
-            else -> return emptyList()
+            else -> {
+                // 插件既没有 EditorJS 也没有 PluginJS：明确抛错，让上层弹窗报错，
+                // 而不是静默返回空列表（否则既不加载出来也不报错）。
+                throw IllegalStateException("插件 ${plugin.name} 缺少 EditorJS/PluginJS 对象，无法加载分类列表")
+            }
         }
         runCatching {
             loadEditorRuntime(scope, uiObjectName)
@@ -308,7 +317,8 @@ object JReadVoicePluginRuntime {
             evalPluginLocales(scope, uiObjectName)
         }.getOrElse {
             Log.w(TAG, "listLocales getLocales failed: plugin=${plugin.name}", it)
-            null
+            // 把 getLocales 真实异常抛给上层，避免错误被吞掉
+            throw it
         }
         val options = localesResultToOptions(result)
         if (options.isNotEmpty()) {

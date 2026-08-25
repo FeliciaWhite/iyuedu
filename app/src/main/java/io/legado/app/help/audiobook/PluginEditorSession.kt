@@ -80,8 +80,9 @@ class PluginEditorSession(
                 else -> ""
             }
             if (uiName.isBlank()) {
-                Log.w(TAG, "init: no EditorJS/PluginJS found in plugin ${plugin.name}")
-                return@runCatching null
+                // 插件既没有 EditorJS 也没有 PluginJS：明确抛错，让上层弹窗报错，
+                // 而不是静默返回 null（否则既不加载出来也不报错）。
+                throw IllegalStateException("插件 ${plugin.name} 缺少 EditorJS/PluginJS 对象，无法初始化编辑器")
             }
 
             // onLoadData
@@ -98,8 +99,8 @@ class PluginEditorSession(
             // onLoadUI — 主线程
             val cont = JReadVoicePluginRuntime.onLoadUI(sc, uiName, context)
             if (cont == null) {
-                Log.w(TAG, "init onLoadUI returned null: plugin=${plugin.name}")
-                return@runCatching null
+                // onLoadUI 渲染失败：抛出错误让上层弹窗，而不是静默返回 null
+                throw IllegalStateException("插件 ${plugin.name} 渲染 UI(onLoadUI)失败，请检查插件代码")
             }
 
             scope = sc
@@ -110,7 +111,8 @@ class PluginEditorSession(
             cont
         }.getOrElse {
             Log.e(TAG, "init failed: plugin=${plugin.name}", it)
-            null
+            // 把真正的初始化异常抛给上层，触发弹窗报错
+            throw it
         }
     }
 

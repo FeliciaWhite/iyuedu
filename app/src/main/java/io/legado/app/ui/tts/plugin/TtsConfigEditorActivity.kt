@@ -1,5 +1,8 @@
 package io.legado.app.ui.tts.plugin
 
+import android.app.AlertDialog
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.MediaPlayer
@@ -10,6 +13,7 @@ import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
+import java.io.File
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -23,6 +27,7 @@ import io.legado.app.databinding.ActivityTtsConfigEditorBinding
 import io.legado.app.help.audiobook.JReadVoiceEngine
 import io.legado.app.help.audiobook.JReadVoicePluginRuntime
 import io.legado.app.help.audiobook.PluginEditorSession
+import io.legado.app.utils.runOnUI
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers
@@ -48,6 +53,45 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         private const val MENU_SAVE = 1
         private const val KEY_PREVIEW_TEXT = "tts_preview_text"
         private const val DEFAULT_PREVIEW_TEXT = "你好呀，你吃饭了吗？"
+    }
+
+    /**
+     * 统一报错弹窗。移植自 TTS_Server_Android (Itts 分支) 的报错机制：
+     * 当插件加载不出内容，或分类(locales)、音色(voices)加载不出来，或遇到其他错误
+     * 导致无法加载时，提前弹出对话框展示完整异常信息，而不是静默降级。
+     * 调用方需在主线程/协程中调用，内部自行切回 UI 线程显示。
+     */
+    private fun displayErrorDialog(t: Throwable, title: String = "加载失败") {
+        runOnUI {
+            val sb = StringBuilder()
+            sb.append(t.localizedMessage ?: t.message ?: t.toString())
+            sb.append("\n\n")
+            val stack = t.stackTraceToString()
+            sb.append(if (stack.length > 3000) stack.take(3000) + "\n..." else stack)
+            val errorText = sb.toString()
+            AlertDialog.Builder(this@TtsConfigEditorActivity)
+                .setTitle(title)
+                .setMessage(errorText)
+                .setPositiveButton(android.R.string.ok, null)
+                .setNeutralButton("复制") { _, _ ->
+                    val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    cm.setPrimaryClip(ClipData.newPlainText(title, errorText))
+                    toastOnUi("报错内容已复制到剪贴板")
+                }
+                .setNegativeButton("保存") { _, _ ->
+                    runCatching {
+                        val dir = File(getExternalFilesDir(null), "error_logs").apply { mkdirs() }
+                        val file = File(dir, "tts_error_${System.currentTimeMillis()}.txt")
+                        file.writeText("[$title]\n$errorText")
+                        file.absolutePath
+                    }.onSuccess { path ->
+                        toastOnUi("报错已保存: $path")
+                    }.onFailure {
+                        toastOnUi("保存失败: ${it.message}")
+                    }
+                }
+                .show()
+        }
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -193,9 +237,9 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
             renderPluginUi(plugin)
             val session = editorSession
             localeOptions = if (session != null && session.isInitialized) {
-                withContext(Dispatchers.IO) { runCatching { session.listLocales() }.getOrDefault(emptyList()) }
+                withContext(Dispatchers.IO) { runCatching { session.listLocales() }.onFailure { displayErrorDialog(it, "分类加载失败") }.getOrDefault(emptyList()) }
             } else {
-                withContext(Dispatchers.IO) { runCatching { JReadVoicePluginRuntime.listLocales(this@TtsConfigEditorActivity, plugin) }.getOrDefault(emptyList()) }
+                withContext(Dispatchers.IO) { runCatching { JReadVoicePluginRuntime.listLocales(this@TtsConfigEditorActivity, plugin) }.onFailure { displayErrorDialog(it, "分类加载失败") }.getOrDefault(emptyList()) }
             }
             if (localeOptions.isEmpty()) {
                 binding.spinnerLocale.visibility = View.GONE
@@ -219,7 +263,7 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         val result = runCatching { withContext(Dispatchers.IO) { session.init() } }
         result.onFailure {
             android.util.Log.e("TtsConfigEditor", "renderPluginUi init failed: ${plugin.name}", it)
-            toastOnUi("插件初始化失败: ${it.message}")
+            displayErrorDialog(it, "插件加载失败")
         }
         val container = result.getOrNull()
         if (container != null) {
@@ -249,13 +293,13 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         lifecycleScope.launch {
             voiceOptions = withContext(Dispatchers.IO) {
                 if (session != null && session.isInitialized) {
-                    runCatching { session.listVoices(locale) }.getOrDefault(emptyList())
+                    runCatching { session.listVoices(locale) }.onFailure { displayErrorDialog(it, "音色加载失败") }.getOrDefault(emptyList())
                 } else {
                     val pluginIdx = binding.spinnerPlugin.selectedItemPosition
                     if (pluginIdx <= 0) emptyList()
                     else {
                         val plugin = plugins.getOrNull(pluginIdx - 1) ?: return@withContext emptyList()
-                        runCatching { JReadVoicePluginRuntime.listVoices(this@TtsConfigEditorActivity, plugin, locale) }.getOrDefault(emptyList())
+                        runCatching { JReadVoicePluginRuntime.listVoices(this@TtsConfigEditorActivity, plugin, locale) }.onFailure { displayErrorDialog(it, "音色加载失败") }.getOrDefault(emptyList())
                     }
                 }
             }

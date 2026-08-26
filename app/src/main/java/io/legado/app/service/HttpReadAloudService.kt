@@ -205,6 +205,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
 
     private var speechRate: Int = AppConfig.speechRatePlay + 5
     private var downloadTask: Coroutine<*>? = null
+    private var preDownloadJob: Job? = null
     private var playIndexJob: Job? = null
     private var playErrorNo = 0
     // 当前段出错是否已重试过，保证同一段只重试一次，避免死循环
@@ -288,6 +289,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
         instance = null
         downloadTask?.cancel()
         playIndexJob?.cancel()
+        preDownloadJob?.cancel()
         silentPlayCheckJob?.cancel()
         stopSubtitleSync()
         
@@ -356,6 +358,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
         // 【关键修复】playStop 必须立即生效，改回直接调用
         exoPlayer.stop()
         playIndexJob?.cancel()
+        preDownloadJob?.cancel()
         stopSubtitleSync()
         pauseSoundEffects()
         if (affectBgm) {
@@ -620,8 +623,19 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                     }
                 }
             }
-            // 预下载移到锁外执行，避免 @js: 引擎 evalJS 阻塞导致翻页/切章时新任务等待锁释放
-            preDownloadAudios(httpTts)
+            // 预下载放到独立子协程，与主播放协程解耦：
+            // 翻页/切章时 downloadTask?.cancel() 只取消主协程，不会卡在 preDownloadAudios 的 evalJS 上。
+            // 旧 preDownloadJob 先取消再启动新的，避免多个预下载任务并发争抢 TTS 连接。
+            preDownloadJob?.cancel()
+            preDownloadJob = lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    preDownloadAudios(httpTts)
+                } catch (e: CancellationException) {
+                    // 正常取消，忽略
+                } catch (e: Exception) {
+                    AppLog.put("预下载出错\n${e.localizedMessage}", e)
+                }
+            }
         }.onError { e ->
             AppLog.put("朗读下载出错\n${e.localizedMessage}", e, true)
         }
@@ -885,8 +899,17 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                     }
                 }
             }
-            // 预下载移到锁外执行，避免 @js: 引擎 evalJS 阻塞导致翻页/切章时新任务等待锁释放
-            preDownloadAudiosStream(httpTts, downloaderChannel)
+            // 预下载放到独立子协程，与主播放协程解耦（同 downloadAndPlayAudios）
+            preDownloadJob?.cancel()
+            preDownloadJob = lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    preDownloadAudiosStream(httpTts, downloaderChannel)
+                } catch (e: CancellationException) {
+                    // 正常取消，忽略
+                } catch (e: Exception) {
+                    AppLog.put("预下载出错\n${e.localizedMessage}", e)
+                }
+            }
             downloaderChannel.close()
         }.onError { e ->
             AppLog.put("朗读下载出错\n${e.localizedMessage}", e, true)
@@ -1162,7 +1185,10 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
             while (true) {
                 try {
                     io.legado.app.help.audiobook.TtsPluginJsBridge.resetSynthesizeFlag()
-                    val jsResult = httpTts.evalJS(WEBSOCKET_JS_BRIDGE + jsCode) {
+                    val jsResult = httpTts.evalJS(
+                        WEBSOCKET_JS_BRIDGE + jsCode,
+                        currentCoroutineContext()
+                    ) {
                         put("speakText", speakText)
                         put("speechRate", speechRate)
                         put("ws", wsHelper)
@@ -1222,7 +1248,10 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
             if (!jsStr.isNullOrBlank()) {
                 try {
                     io.legado.app.help.audiobook.TtsPluginJsBridge.resetSynthesizeFlag()
-                    val jsResult = httpTts.evalJS(WEBSOCKET_JS_BRIDGE + jsStr) {
+                    val jsResult = httpTts.evalJS(
+                        WEBSOCKET_JS_BRIDGE + jsStr,
+                        currentCoroutineContext()
+                    ) {
                         put("speakText", speakText)
                         put("speechRate", speechRate)
                         put("ws", wsHelper)

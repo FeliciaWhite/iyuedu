@@ -32,6 +32,7 @@ import io.legado.app.utils.showHelp
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -188,13 +189,17 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
     private fun loadData() {
         lifecycleScope.launch {
             withContext(Dispatchers.IO) { JReadVoiceEngine.ensureBuiltInVoicePresets(this@TtsPluginActivity) }
-            allPlugins = withContext(Dispatchers.IO) { JReadVoiceEngine.listPlugins(this@TtsPluginActivity) }
+            // 并行加载 plugins/groups/configs，避免串行 3 次 IO
+            val pluginsDeferred = async(Dispatchers.IO) { JReadVoiceEngine.listPlugins(this@TtsPluginActivity) }
+            val groupsDeferred = async(Dispatchers.IO) { JReadVoiceEngine.listGroups(this@TtsPluginActivity) }
+            val configsDeferred = async(Dispatchers.IO) { JReadVoiceEngine.listConfigs(this@TtsPluginActivity) }
+            allPlugins = pluginsDeferred.await()
             pluginsMap = allPlugins.associateBy { it.id }
             adapter.setPluginsMap(pluginsMap)
-            allGroups = withContext(Dispatchers.IO) { JReadVoiceEngine.listGroups(this@TtsPluginActivity) }
+            allGroups = groupsDeferred.await()
             when (currentTab) {
                 TAB_CONFIGS -> {
-                    allConfigs = withContext(Dispatchers.IO) { JReadVoiceEngine.listConfigs(this@TtsPluginActivity) }
+                    allConfigs = configsDeferred.await()
                     android.util.Log.d("TtsPluginActivity", "loadData: configs=${allConfigs.size} groups=${allGroups.size} plugins=${allPlugins.size}")
                     binding.searchBar.visibility = View.VISIBLE
                     rebuildRows()
@@ -204,8 +209,6 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                     rebuildPluginRows()
                 }
             }
-            // 注意：不再在 loadData 同步路径写 fayinren.json（避免每次进入/刷新都写文件造成卡顿）
-            // 写文件改为在启用/禁用/导入等操作后由 refreshListLight() 异步触发
         }
     }
 
@@ -246,9 +249,12 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
             { groupSortMap[it] ?: Int.MAX_VALUE },
             { it }
         ))
+        // 预分组：一次 groupBy 消除循环内重复 filter（O(N×G) → O(N)）
+        val configsByGroup = filtered.groupBy { it.groupName.ifBlank { "默认分组" } }
+        val groupsByGroupName = allGroups.groupBy { it.groupName.ifBlank { "默认分组" } }
         val rows = mutableListOf<ConfigListRow>()
         for (groupName in sortedGroupNames) {
-            val groupConfigs = filtered.filter { it.groupName.ifBlank { "默认分组" } == groupName }
+            val groupConfigs = configsByGroup[groupName] ?: emptyList()
             // 默认展开所有分组（用户可手动折叠）
             val groupExpanded = expandedGroups.contains(groupName) || searchQuery.isNotEmpty()
             val allOn = groupConfigs.isNotEmpty() && groupConfigs.all { it.enabled }
@@ -257,18 +263,20 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
             if (groupExpanded) {
                 // 合并子分组：配置项中的 + listGroups 中该分组下的
                 val configSubNames = groupConfigs.map { it.subGroupName.ifBlank { "默认" } }.toMutableSet()
-                val savedSubNames = allGroups.filter { it.groupName.ifBlank { "默认分组" } == groupName }
+                val savedSubNames = (groupsByGroupName[groupName] ?: emptyList())
                     .map { it.subGroupName.ifBlank { "默认" } }.toSet()
                 configSubNames.addAll(savedSubNames)
-                val subSortMap = allGroups
-                    .filter { it.groupName.ifBlank { "默认分组" } == groupName && it.subGroupName.isNotBlank() && it.thirdGroupName.isBlank() }
+                val subSortMap = (groupsByGroupName[groupName] ?: emptyList())
+                    .filter { it.subGroupName.isNotBlank() && it.thirdGroupName.isBlank() }
                     .associate { it.subGroupName.ifBlank { "默认" } to it.sortOrder }
                 val sortedSubNames = configSubNames.sortedWith(compareBy(
                     { subSortMap[it] ?: Int.MAX_VALUE },
                     { it }
                 ))
+                // 预分组子组
+                val configsBySub = groupConfigs.groupBy { it.subGroupName.ifBlank { "默认" } }
                 for (subGroupName in sortedSubNames) {
-                    val subConfigs = groupConfigs.filter { it.subGroupName.ifBlank { "默认" } == subGroupName }
+                    val subConfigs = configsBySub[subGroupName] ?: emptyList()
                     val subExpanded = expandedSubGroups.contains(Pair(groupName, subGroupName)) || searchQuery.isNotEmpty()
                     val hasMultipleSubs = sortedSubNames.size > 1
                     if (hasMultipleSubs) {
@@ -324,6 +332,22 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
             R.id.menu_export -> {
                 val suffix = if (currentTab == TAB_CONFIGS) "configs" else "plugins"
                 exportLauncher.launch("tts_${suffix}_${System.currentTimeMillis()}.json")
+            }
+            R.id.menu_disable_all -> lifecycleScope.launch {
+                alert("确认", "确定要禁用所有配置吗？") {
+                    positiveButton("确定") {
+                        lifecycleScope.launch {
+                            withContext(Dispatchers.IO) {
+                                JReadVoiceEngine.disableAllConfigs(this@TtsPluginActivity)
+                            }
+                            allConfigs = allConfigs.map { it.copy(enabled = false) }
+                            rebuildRows()
+                            scheduleExportEnabledTags()
+                            toastOnUi("已禁用所有配置")
+                        }
+                    }
+                    negativeButton("取消") {}
+                }
             }
             R.id.menu_list_tags -> lifecycleScope.launch {
                 val tags = withContext(Dispatchers.IO) {

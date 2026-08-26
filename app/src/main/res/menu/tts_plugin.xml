@@ -24,6 +24,11 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/menu_disable_all"
+        android:title="全部禁用"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/menu_list_tags"
         android:title="查看所有标签"
         app:showAsAction="never" />

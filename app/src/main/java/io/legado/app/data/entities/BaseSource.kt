@@ -192,12 +192,12 @@ interface BaseSource : JsExtensions {
                 when {
                     it.startsWith("@js:") -> evalJS(
                         "${getLoginJs() ?: ""}\n${it.substring(4)}",
-                        configureScriptBindings()
+                        bindingsConfig = configureScriptBindings()
                     ).toString()
 
                     it.startsWith("<js>") -> evalJS(
                         "${getLoginJs() ?: ""}\n${it.substring(4, it.lastIndexOf("<"))}",
-                        configureScriptBindings()
+                        bindingsConfig = configureScriptBindings()
                     ).toString()
 
                     else -> it
@@ -320,9 +320,15 @@ interface BaseSource : JsExtensions {
 
     /**
      * 执行JS
+     * @param coroutineContext 协程上下文，传入后 Rhino 引擎可检测协程取消并中断 JS 执行。
+     *        不传时走原有路径（不响应取消），保持向后兼容。
      */
     @Throws(Exception::class)
-    fun evalJS(jsStr: String, bindingsConfig: ScriptBindings.() -> Unit = {}): Any? {
+    fun evalJS(
+        jsStr: String,
+        coroutineContext: kotlin.coroutines.CoroutineContext? = null,
+        bindingsConfig: ScriptBindings.() -> Unit = {}
+    ): Any? {
         val bindings = buildScriptBindings { bindings ->
             bindings["java"] = this
             bindings["source"] = this
@@ -340,6 +346,10 @@ interface BaseSource : JsExtensions {
                 prototype = sharedScope
             }
         }
-        return RhinoScriptEngine.eval(jsStr, scope)
+        return if (coroutineContext != null) {
+            RhinoScriptEngine.eval(jsStr, scope, coroutineContext)
+        } else {
+            RhinoScriptEngine.eval(jsStr, scope)
+        }
     }
 }

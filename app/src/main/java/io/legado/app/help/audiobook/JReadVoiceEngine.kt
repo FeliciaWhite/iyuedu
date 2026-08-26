@@ -28,6 +28,43 @@ object JReadVoiceEngine {
     private const val KEY_PLUGINS = "voice_plugins"
     private const val KEY_GROUPS = "voice_groups"
     private const val KEY_BUILTIN_SYSTEM_CONFIG_SEEDED = "builtin_jread_voice_system_configs_seeded_v3"
+
+    // ===== 内存缓存：避免每次合成音频都全量解析 SharedPreferences JSON =====
+    @Volatile
+    private var cachedConfigs: List<VoiceConfig>? = null
+    @Volatile
+    private var cachedPlugins: List<VoicePlugin>? = null
+    /** voiceTag(已normalize) → 启用的 VoiceConfig，用于 O(1) 查找 */
+    @Volatile
+    private var cachedConfigIndex: Map<String, VoiceConfig>? = null
+    /** pluginId → 启用的 VoicePlugin，用于 O(1) 查找 */
+    @Volatile
+    private var cachedPluginIndex: Map<String, VoicePlugin>? = null
+
+    /** 清空配置缓存（在 saveConfigs 写盘后调用） */
+    private fun invalidateConfigCache() {
+        cachedConfigs = null
+        cachedConfigIndex = null
+        // 配置可能被外部修改，迁移需要重新检查
+        migrationDone = false
+    }
+
+    /** 清空插件缓存（在 savePlugins 写盘后调用） */
+    private fun invalidatePluginCache() {
+        cachedPlugins = null
+        cachedPluginIndex = null
+    }
+
+    /** 清空分组缓存（在 saveGroups 写盘后调用） */
+    @Volatile
+    private var cachedGroups: List<VoiceGroup>? = null
+    private fun invalidateGroupCache() {
+        cachedGroups = null
+    }
+
+    /** 迁移幂等标志：首次执行后设 true，本次进程内不再重复迁移 */
+    @Volatile
+    private var migrationDone = false
     private const val KEY_BUILTIN_VIVI_CONFIG_SEEDED = "builtin_vivi_voice_pool_v6_2398_grouped_seeded_v4"
     private const val KEY_BUILTIN_PLUGIN_BUNDLE_12_SEEDED = "builtin_jread_voice_plugins_12_seeded"
     private const val KEY_BUILTIN_AUDIOS_1064_PLUGIN_SEEDED = "builtin_audios_1064_plugin_seeded"
@@ -119,6 +156,7 @@ object JReadVoiceEngine {
     )
 
     fun listConfigs(context: Context, ensureBuiltIns: Boolean = true): List<VoiceConfig> {
+        cachedConfigs?.let { return it }
         val appContext = context.applicationContext
         if (ensureBuiltIns && !seedingBuiltInConfigs) {
             ensureBuiltInVoiceConfigPresets(appContext)
@@ -129,12 +167,14 @@ object JReadVoiceEngine {
             .getString(KEY_CONFIGS, "[]")
             .orEmpty()
         val array = runCatching { JSONArray(raw) }.getOrNull() ?: return emptyList()
-        return buildList {
+        val result = buildList {
             for (index in 0 until array.length()) {
                 val obj = array.optJSONObject(index) ?: continue
                 parseVoiceConfig(obj)?.let { add(it) }
             }
         }
+        cachedConfigs = result
+        return result
     }
 
     fun voiceConfigSnapshotVersion(context: Context): String {
@@ -281,11 +321,12 @@ object JReadVoiceEngine {
     }
 
     fun isConfigPlayable(context: Context, config: VoiceConfig): Boolean {
-        return config.isPlayable(context.applicationContext)
+        return config.isPlayable(listPlugins(context.applicationContext))
     }
 
     fun fallbackVoiceTagAfterInvalidAudio(context: Context, voiceTag: String): String? {
-        val configs = listConfigs(context.applicationContext).filter { it.enabled && it.isPlayable(context) }
+        val plugins = listPlugins(context.applicationContext)
+        val configs = listConfigs(context.applicationContext).filter { it.enabled && it.isPlayable(plugins) }
         if (configs.isEmpty()) return null
         val normalizedTag = normalizeVoiceTag(voiceTag)
         val exact = findConfigIn(configs, normalizedTag)
@@ -301,13 +342,16 @@ object JReadVoiceEngine {
     }
 
     fun listGroups(context: Context): List<VoiceGroup> {
+        cachedGroups?.let { return it }
         val appContext = context.applicationContext
         migrateExistingTimbreVoicePoolGroups(appContext)
         val raw = appContext
             .getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
             .getString(KEY_GROUPS, "[]")
             .orEmpty()
-        return parseVoiceGroups(raw)
+        val result = parseVoiceGroups(raw)
+        cachedGroups = result
+        return result
     }
 
     /**
@@ -543,6 +587,13 @@ object JReadVoiceEngine {
                 }
             }
         saveConfigs(appContext, savedConfigs)
+    }
+
+    /** 一键禁用所有配置 */
+    fun disableAllConfigs(context: Context) {
+        val configs = listConfigs(context)
+        val updated = configs.map { it.copy(enabled = false) }
+        saveConfigs(context, updated)
     }
 
     fun setConfigsEnabled(context: Context, configIds: Collection<String>, enabled: Boolean) {
@@ -903,6 +954,7 @@ object JReadVoiceEngine {
     }
 
     fun listPlugins(context: Context): List<VoicePlugin> {
+        cachedPlugins?.let { return it }
         val appContext = context.applicationContext
         if (!seedingBuiltInPlugins) {
             ensureBuiltInVoicePluginPresets(appContext)
@@ -912,7 +964,7 @@ object JReadVoiceEngine {
             .getString(KEY_PLUGINS, "[]")
             .orEmpty()
         val array = runCatching { JSONArray(raw) }.getOrNull() ?: return emptyList()
-        return buildList {
+        val result = buildList {
             for (index in 0 until array.length()) {
                 val obj = array.optJSONObject(index) ?: continue
                 val pluginBody = importedPluginBody(obj)
@@ -945,6 +997,8 @@ object JReadVoiceEngine {
                 )
             }
         }
+        cachedPlugins = result
+        return result
     }
 
     private fun ensureBuiltInVoicePluginPresets(context: Context) {
@@ -1243,10 +1297,10 @@ object JReadVoiceEngine {
             val obj = array.optJSONObject(index) ?: continue
             val config = parseVoiceConfig(obj) ?: continue
             val id = if (useStableId) stableConfigId(config) else UUID.randomUUID().toString()
-            imported += config.copy(
-                id = id,
-                pluginId = resolveImportedConfigPluginId(context, config, obj),
-            )
+            // 导入配置列表时彻底不关联/校验插件：原样保留 config.pluginId，不再调用
+            // resolveImportedConfigPluginId（该函数每次都要解析全部插件 JSON，配置数量 × 插件数量
+            // 会造成 O(N²) 级耗时，文件越大、插件越多越慢）。插件关联由用户导入后自行处理。
+            imported += config.copy(id = id)
         }
         if (imported.isEmpty()) return 0
         if (useStableId) {
@@ -1263,7 +1317,12 @@ object JReadVoiceEngine {
             existing += deduped
             saveConfigs(context, existing)
         } else {
-            imported.forEach { saveConfig(context, it) }
+            // 批量一次性写入：imported 放在 existing 之后，由 saveConfigs 的 last-wins 去重保证
+            // 相同 id 时新配置覆盖旧配置（useStableId=false 时 imported 为随机 id，等同原逐条追加语义）。
+            // 原逐条 saveConfig 每次都触发一次「读全量 + 写全量」，配置数量大时退化为 O(N²)；
+            // 改为单次 saveConfigs 后写盘次数从 N 次降为 1 次。
+            val existing = listConfigs(context, ensureBuiltIns = false)
+            saveConfigs(context, existing + imported.distinctBy { it.id })
         }
         return imported.size
     }
@@ -1514,9 +1573,11 @@ object JReadVoiceEngine {
 
     private fun findConfig(context: Context, voiceTag: String): VoiceConfig? {
         val configs = listConfigs(context).filter { it.enabled }
+        // 预取插件列表一次，传给 isPlayable/resolveRequest，避免每个候选配置都重新 listPlugins
+        val plugins = listPlugins(context)
         val normalizedTag = normalizeVoiceTag(voiceTag)
         val exact = findConfigIn(configs, normalizedTag)
-        if (exact != null && exact.isPlayable(context)) return exact
+        if (exact != null && exact.isPlayable(plugins)) return exact
         if (exact != null) {
             AppLog.putDebug(
                 "[J阅读声音引擎] 跳过不可用配置: voiceTag=${exact.voiceTag} " +
@@ -1526,15 +1587,15 @@ object JReadVoiceEngine {
         val wantedPool = voiceTagPool(normalizedTag)?.key
         if (wantedPool != null) {
             configs.firstOrNull { config ->
-                config.isPlayable(context) && voiceTagPool(config.voiceTag)?.key == wantedPool
+                config.isPlayable(plugins) && voiceTagPool(config.voiceTag)?.key == wantedPool
             }?.let { return it }
             if (wantedPool == "narration") {
                 AppLog.putDebug("[J阅读声音引擎] 旁白配置不可用，拒绝兜底到角色音色")
                 return null
             }
         }
-        return configs.firstOrNull { it.voiceTag == "旁白" && it.isPlayable(context) }
-            ?: configs.firstOrNull { it.isPlayable(context) }
+        return configs.firstOrNull { it.voiceTag == "旁白" && it.isPlayable(plugins) }
+            ?: configs.firstOrNull { it.isPlayable(plugins) }
     }
 
     private fun findConfigIn(configs: List<VoiceConfig>, voiceTag: String): VoiceConfig? {
@@ -1545,12 +1606,12 @@ object JReadVoiceEngine {
         }
     }
 
-    private fun VoiceConfig.isPlayable(context: Context): Boolean {
-        val plugin = findPlugin(context, pluginId)
+    private fun VoiceConfig.isPlayable(plugins: List<VoicePlugin>): Boolean {
+        val plugin = plugins.firstOrNull { it.enabled && (it.id == pluginId || it.pluginId == pluginId) }
         if (plugin != null && plugin.code.isNotBlank() && urlTemplate.isBlank()) {
             return voice.isNotBlank()
         }
-        return resolveRequest(context, this).urlTemplate.isNotBlank()
+        return resolveRequest(plugin).urlTemplate.isNotBlank()
     }
 
     private fun requestAudioToFile(
@@ -1661,7 +1722,7 @@ object JReadVoiceEngine {
             return
         }
 
-        val request = resolveRequest(context, config)
+        val request = config.resolveRequest(findPlugin(context, config.pluginId))
         require(request.urlTemplate.isNotBlank()) { "J阅读声音配置缺少插件或 URL" }
         val url = render(request.urlTemplate, text, voiceTag, config, pointer, requestId)
         val headers = parseHeaders(render(request.headersText, text, voiceTag, config, pointer, requestId))
@@ -1787,21 +1848,32 @@ object JReadVoiceEngine {
         val responseAudioPath: String,
     )
 
-    private fun resolveRequest(context: Context, config: VoiceConfig): RequestTemplate {
-        val plugin = findPlugin(context, config.pluginId)
+    private fun VoiceConfig.resolveRequest(plugin: VoicePlugin?): RequestTemplate {
         return RequestTemplate(
-            method = config.method.takeIf { config.urlTemplate.isNotBlank() } ?: plugin?.method ?: config.method,
-            urlTemplate = config.urlTemplate.ifBlank { plugin?.urlTemplate.orEmpty() },
-            headersText = config.headersText.ifBlank { plugin?.headersText.orEmpty() },
-            bodyTemplate = config.bodyTemplate.ifBlank { plugin?.bodyTemplate.orEmpty() },
-            responseAudioPath = config.responseAudioPath.ifBlank { plugin?.responseAudioPath.orEmpty() },
+            method = method.takeIf { urlTemplate.isNotBlank() } ?: plugin?.method ?: method,
+            urlTemplate = urlTemplate.ifBlank { plugin?.urlTemplate.orEmpty() },
+            headersText = headersText.ifBlank { plugin?.headersText.orEmpty() },
+            bodyTemplate = bodyTemplate.ifBlank { plugin?.bodyTemplate.orEmpty() },
+            responseAudioPath = responseAudioPath.ifBlank { plugin?.responseAudioPath.orEmpty() },
         )
     }
 
     private fun findPlugin(context: Context, pluginId: String): VoicePlugin? {
         if (pluginId.isBlank()) return null
-        return listPlugins(context)
-            .firstOrNull { it.enabled && (it.id == pluginId || it.pluginId == pluginId) }
+        // 优先用缓存索引 O(1) 查找，避免每次都 listPlugins 全量解析
+        cachedPluginIndex?.let { index ->
+            index[pluginId]?.let { return it }
+        }
+        val plugins = listPlugins(context)
+        // 构建索引供后续复用
+        val index = plugins.filter { it.enabled }
+            .associateBy { it.id }
+            .toMutableMap()
+        plugins.filter { it.enabled }.forEach { p ->
+            if (p.pluginId.isNotBlank()) index.putIfAbsent(p.pluginId, p)
+        }
+        cachedPluginIndex = index
+        return index[pluginId]
     }
 
     private fun readJsonPath(root: JSONObject, path: String): String {
@@ -1829,6 +1901,7 @@ object JReadVoiceEngine {
             .edit()
             .putString(KEY_GROUPS, array.toString())
             .apply()
+        invalidateGroupCache()
     }
 
     private fun voiceGroupToJson(group: VoiceGroup): JSONObject {
@@ -1869,7 +1942,7 @@ object JReadVoiceEngine {
     }
 
     private fun migrateExistingTimbreVoicePoolGroups(context: Context) {
-        if (migratingTimbreVoiceGroups || seedingBuiltInConfigs) return
+        if (migratingTimbreVoiceGroups || seedingBuiltInConfigs || migrationDone) return
         val appContext = context.applicationContext
         migratingTimbreVoiceGroups = true
         try {
@@ -1907,6 +1980,7 @@ object JReadVoiceEngine {
                 prefs.edit().putString(KEY_CONFIGS, migratedArray.toString()).apply()
                 AppLog.putDebug("[J阅读声音引擎] 已规范化标签格式")
             }
+            migrationDone = true
         } finally {
             migratingTimbreVoiceGroups = false
         }
@@ -2020,6 +2094,7 @@ object JReadVoiceEngine {
             .edit()
             .putString(KEY_CONFIGS, array.toString())
             .apply()
+        invalidateConfigCache()
     }
 
     /**
@@ -2070,6 +2145,7 @@ object JReadVoiceEngine {
             .edit()
             .putString(KEY_PLUGINS, array.toString())
             .apply()
+        invalidatePluginCache()
     }
 
     private fun pluginToJson(plugin: VoicePlugin, includeUserVars: Boolean): JSONObject {

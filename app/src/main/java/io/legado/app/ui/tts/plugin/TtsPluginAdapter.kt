@@ -37,6 +37,7 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     private var onGroupDeleteDisabled: ((String, String?) -> Unit)? = null
     private var onGroupConvertToSub: ((String) -> Unit)? = null
     private var onGroupConvertToGroup: ((String, String) -> Unit)? = null
+    private var onGroupMergeSubs: ((String) -> Unit)? = null
     private var onPluginClick: ((JReadVoiceEngine.VoicePlugin) -> Unit)? = null
     private var onPluginEdit: ((JReadVoiceEngine.VoicePlugin) -> Unit)? = null
     private var onPluginToggle: ((JReadVoiceEngine.VoicePlugin, Boolean) -> Unit)? = null
@@ -258,6 +259,7 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         onGroupDeleteDisabled: ((String, String?) -> Unit)? = null,
         onGroupConvertToSub: ((String) -> Unit)? = null,
         onGroupConvertToGroup: ((String, String) -> Unit)? = null,
+        onGroupMergeSubs: ((String) -> Unit)? = null,
         onPluginClick: ((JReadVoiceEngine.VoicePlugin) -> Unit)? = null,
         onPluginEdit: ((JReadVoiceEngine.VoicePlugin) -> Unit)? = null,
         onPluginToggle: ((JReadVoiceEngine.VoicePlugin, Boolean) -> Unit)? = null,
@@ -275,6 +277,7 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         this.onGroupCopy = onGroupCopy; this.onGroupDeleteEnabled = onGroupDeleteEnabled
         this.onGroupDeleteDisabled = onGroupDeleteDisabled
         this.onGroupConvertToSub = onGroupConvertToSub; this.onGroupConvertToGroup = onGroupConvertToGroup
+        this.onGroupMergeSubs = onGroupMergeSubs
         this.onPluginClick = onPluginClick; this.onPluginEdit = onPluginEdit
         this.onPluginToggle = onPluginToggle; this.onPluginDelete = onPluginDelete
         this.onPluginAudioParams = onPluginAudioParams
@@ -330,7 +333,7 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
                 val pm = PopupMenu(itemView.context, ivMore)
                 pm.menu.add("一键整理标签"); pm.menu.add("更换插件")
                 pm.menu.add("音频调节"); pm.menu.add("转为子分组")
-                pm.menu.add("复制分组"); pm.menu.add("删除启用项"); pm.menu.add("删除停用项")
+                pm.menu.add("合并子分组"); pm.menu.add("复制分组"); pm.menu.add("删除启用项"); pm.menu.add("删除停用项")
                 pm.menu.add("重命名分组"); pm.menu.add("删除分组")
                 pm.setOnMenuItemClickListener { item ->
                     when (item.title) {
@@ -338,6 +341,7 @@ class TtsPluginAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
                         "更换插件" -> onGroupReplacePlugin?.invoke(row.groupName, null)
                         "音频调节" -> onGroupAudioParams?.invoke(row.groupName, null)
                         "转为子分组" -> onGroupConvertToSub?.invoke(row.groupName)
+                        "合并子分组" -> onGroupMergeSubs?.invoke(row.groupName)
                         "复制分组" -> onGroupCopy?.invoke(row.groupName, null)
                         "删除启用项" -> onGroupDeleteEnabled?.invoke(row.groupName, null)
                         "删除停用项" -> onGroupDeleteDisabled?.invoke(row.groupName, null)

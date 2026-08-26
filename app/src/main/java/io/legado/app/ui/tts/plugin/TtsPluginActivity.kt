@@ -158,6 +158,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
             onGroupAudioParams = { groupName, subGroupName -> showGroupAudioParamsDialog(groupName, subGroupName) },
             onGroupConvertToSub = { groupName -> convertGroupToSub(groupName) },
             onGroupConvertToGroup = { groupName, subGroupName -> convertSubToGroup(groupName, subGroupName) },
+            onGroupMergeSubs = { groupName -> mergeSubGroups(groupName) },
             onPluginClick = { plugin -> showPluginOptions(plugin) },
             onPluginEdit = { plugin -> showPluginEditor(plugin) },
             onPluginToggle = { plugin, enabled -> togglePlugin(plugin, enabled) },
@@ -799,6 +800,86 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                 allGroups = JReadVoiceEngine.listGroups(this@TtsPluginActivity)
             }
             toastOnUi("已转为「$targetGroup」的子分组")
+            refreshListLight()
+        }
+    }
+
+    /**
+     * 合并子分组：选中一个大分组，列出其下所有子分组（支持多选），
+     * 将选中的子分组合并为一个子分组（目标名取第一个勾选项的名称，
+     * 其余子分组下的配置项统一归属到目标子分组，被合并的子分组消失）。
+     */
+    private fun mergeSubGroups(groupName: String) {
+        val srcGroup = groupName.ifBlank { "默认分组" }
+        lifecycleScope.launch {
+            val allConfigsNow = withContext(Dispatchers.IO) {
+                JReadVoiceEngine.listConfigs(this@TtsPluginActivity, ensureBuiltIns = false)
+            }
+            // 该大分组下出现过的子分组真实值集合，空串代表「默认」
+            val realSubs = allConfigsNow
+                .filter { it.groupName.ifBlank { "默认分组" } == srcGroup }
+                .map { it.subGroupName }
+                .toSet()
+            if (realSubs.size < 2) {
+                toastOnUi("该大分组下子分组不足 2 个，无法合并")
+                return@launch
+            }
+            // 展示用名称：真实空串显示为「默认」
+            val displaySubs = realSubs.map { it.ifBlank { "默认" } }.distinct().sorted()
+            val checked = BooleanArray(displaySubs.size)
+            withContext(Dispatchers.Main) {
+                androidx.appcompat.app.AlertDialog.Builder(this@TtsPluginActivity)
+                    .setTitle("合并子分组：多选要合并的子分组")
+                    .setMultiChoiceItems(displaySubs.toTypedArray(), checked) { _, _, _ -> }
+                    .setPositiveButton("合并") { _, _ ->
+                        val selectedDisplay = displaySubs.filterIndexed { i, _ -> checked[i] }
+                        if (selectedDisplay.size < 2) {
+                            toastOnUi("请至少选择 2 个子分组")
+                            return@setPositiveButton
+                        }
+                        doMergeSubGroups(srcGroup, selectedDisplay, allConfigsNow)
+                    }
+                    .setNegativeButton("取消", null)
+                    .show()
+            }
+        }
+    }
+
+    private fun doMergeSubGroups(
+        srcGroup: String,
+        selectedDisplay: List<String>,
+        allConfigsNow: List<JReadVoiceEngine.VoiceConfig>
+    ) {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                // 目标子分组取第一个勾选项；展示名「默认」→ 真实空串
+                val targetDisplay = selectedDisplay.first()
+                val targetReal = if (targetDisplay == "默认") "" else targetDisplay
+                val selectedReal = selectedDisplay.map { if (it == "默认") "" else it }.toSet()
+                val updated = allConfigsNow.map { c ->
+                    if (c.groupName.ifBlank { "默认分组" } == srcGroup &&
+                        c.subGroupName in selectedReal && c.subGroupName != targetReal
+                    ) {
+                        c.copy(subGroupName = targetReal)
+                    } else c
+                }
+                JReadVoiceEngine.saveConfigsBatch(this@TtsPluginActivity, updated)
+                // 清理被合并掉的多余子分组记录（subGroupName 不再有配置项存在时移除）
+                val remainSubs = updated
+                    .filter { it.groupName.ifBlank { "默认分组" } == srcGroup }
+                    .map { it.subGroupName }
+                    .toSet()
+                val groups = JReadVoiceEngine.listGroups(this@TtsPluginActivity).toMutableList()
+                groups.removeAll {
+                    it.groupName.ifBlank { "默认分组" } == srcGroup &&
+                    it.subGroupName.isNotBlank() && it.thirdGroupName.isBlank() &&
+                    it.subGroupName !in remainSubs
+                }
+                JReadVoiceEngine.saveGroups(this@TtsPluginActivity, groups)
+                allConfigs = JReadVoiceEngine.listConfigs(this@TtsPluginActivity, ensureBuiltIns = false)
+                allGroups = JReadVoiceEngine.listGroups(this@TtsPluginActivity)
+            }
+            toastOnUi("已合并为「${if (selectedDisplay.first() == "默认") "默认" else selectedDisplay.first()}」")
             refreshListLight()
         }
     }

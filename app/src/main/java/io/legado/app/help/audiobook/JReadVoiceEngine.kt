@@ -1163,6 +1163,14 @@ object JReadVoiceEngine {
         ) {
             return "maoxiang.tts.v3"
         }
+        // 插件未声明 id/pluginId 时，返回一个全新的随机 UUID 作为 id。
+        // 之前这里返回空字符串 ""，导致两次导入同名插件时 id 都为 ""，
+        // importPluginsFromJson / importPluginsFromPackageBytes 的去重比较
+        // (it.id == plugin.id) 命中，第二份会静默覆盖第一份，最终在插件列表里
+        // 只显示一个。改为每次生成独立 UUID，可保留多次导入的同名插件。
+        if (explicit.isBlank()) {
+            return UUID.randomUUID().toString()
+        }
         return explicit
     }
 
@@ -1242,12 +1250,17 @@ object JReadVoiceEngine {
         }
         if (imported.isEmpty()) return 0
         if (useStableId) {
-            // 用稳定 id 去重：删除现有列表中与导入项稳定 id 相同的旧条目，再整体写入（覆盖而非追加）
+            // 用稳定 id 去重：删除现有列表中与导入项稳定 id 相同的旧条目，再整体写入（覆盖而非追加）。
+            // 注意：单次导入的 JSON 内若包含多条稳定 id 相同的配置（例如导出时同一角色被重复写入），
+            // 这里也要对 imported 自身按 id 去重（保留最后一条），否则 existing += imported 会把这些
+            // 重复 id 的配置一并追加，导致存储里出现多条相同 id 的配置。后续按 id 删除/替换时会误伤
+            // 同 id 的其它配置（如删除禁用项时把启用项一并删掉）。
             val stableIds = imported.map { it.id }.toSet()
+            val deduped = imported.distinctBy { it.id }
             val existing = listConfigs(context, ensureBuiltIns = false)
                 .filterNot { it.id in stableIds }
                 .toMutableList()
-            existing += imported
+            existing += deduped
             saveConfigs(context, existing)
         } else {
             imported.forEach { saveConfig(context, it) }
@@ -1972,8 +1985,15 @@ object JReadVoiceEngine {
     }
 
     private fun saveConfigs(context: Context, configs: List<VoiceConfig>) {
+        // 防御：不允许存储里出现多条相同 id 的配置（例如历史导入产生的重复副本、
+        // 或导出再导入时同 id 被多次写入）。相同 id 视为同一配置，保留最后一条，
+        // 确保 id 可作为唯一主键使用，避免按 id 删除/替换时误伤同 id 的其它配置。
+        val deduped = configs.withIndex().groupBy(
+            keySelector = { if (it.value.id.isBlank()) "blank_${it.index}" else it.value.id },
+            valueTransform = { it.value }
+        ).map { (_, list) -> list.last() }
         val array = JSONArray()
-        configs.forEach {
+        deduped.forEach {
             array.put(voiceConfigToJson(it))
         }
         context.applicationContext

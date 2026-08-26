@@ -316,13 +316,23 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
                     isAppearanceLightNavigationBars = true
                 }
             } else {
-                // 底部面板模式：窗口仅包裹底部面板（WRAP_CONTENT），
-                // 上半部分不在窗口内，自然露出下层阅读页文字且触摸归 Activity，不遮挡、不拦截。
-                // 上滑"进入全屏"手势在底部面板区域内完成（面板本身有高度，
-                // 上滑一小段即触发），无需把窗口改成整屏，避免整屏白底遮挡文字。
+                // 底部面板模式：只占屏幕下半部分（WRAP_CONTENT + BOTTOM），
+                // 上半屏空白不在窗口内，且通过 FLAG_NOT_TOUCH_MODAL 让窗口外触摸穿透到下层阅读页，
+                // 可直接点字翻页、操作原文。
+                // 必须彻底复位全屏延伸模式对 decorView / 系统栏的改动，否则穿透会失效：
                 WindowCompat.setDecorFitsSystemWindows(this, true)
+                decorView.setPadding(0, 0, 0, 0)
+                statusBarColor = Color.TRANSPARENT
+                navigationBarColor = Color.TRANSPARENT
                 clearFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-                clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL)
+                clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS or WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION)
+                // 让窗口外（上半屏）触摸穿透到下层阅读页
+                addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL)
+                WindowInsetsControllerCompat(this, decorView).apply {
+                    show(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
+                    isAppearanceLightStatusBars = true
+                    isAppearanceLightNavigationBars = true
+                }
                 val attr = attributes
                 attr.gravity = Gravity.BOTTOM
                 attr.dimAmount = 0.0f
@@ -389,31 +399,23 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
     }
 
     /**
-     * 朗读界面手势（半屏模式）：
-     * - 从下往上滑动（dy<0）→ 开始/恢复朗读（与"开始朗读"按钮行为一致，不进全屏）；
-     * - 从上往下滑动（dy>0）→ 退出朗读界面；
-     * - 左右滑动（横向位移 > 纵向且过阈值）→ 翻页（左滑下一页，右滑上一页），
-     *   因为半屏模式上层 Dialog 模态拦截了下层阅读页，无法直接点字翻页，故在此提供手势翻页。
-     * 手势监听挂载到 Window 根（decorView）；返回 false 不消费事件，
-     * 子 View（按钮等）与下层阅读区照常响应。
+     * 全屏模式的退出手势：自上而下滑动 → 退出朗读界面。
+     * 半屏模式不挂任何 decorView 触摸监听（让上半屏空白触摸穿透到下层阅读页，
+     * 可直接点字翻页、操作原文），故不在此拦截。
      */
     @SuppressLint("ClickableViewAccessibility")
     private fun initSwipeToDismiss() {
+        if (!isFullscreen) return
         val touchSlop = ViewConfiguration.get(requireContext()).scaledTouchSlop
-        var startX = 0f
         var startY = 0f
         var handled = false
         val gestureDetector = GestureDetector(requireContext(), object : GestureDetector.SimpleOnGestureListener() {
             override fun onDown(e: MotionEvent): Boolean {
-                startX = e.x
                 startY = e.y
                 handled = false
                 return true
             }
 
-            // 用 e2 - start 的绝对位移判断方向（避免 distanceY 符号歧义）：
-            // dy < 0 → 手指从下往上； dy > 0 → 手指从上往下；
-            // |dx| > |dy| 且超过阈值 → 左右滑动翻页。
             override fun onScroll(
                 e1: MotionEvent?,
                 e2: MotionEvent,
@@ -422,27 +424,7 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
             ): Boolean {
                 if (handled) return false
                 val dy = e2.y - startY
-                val dx = e2.x - startX
-                // 以下为半屏模式专属手势（全屏模式下层阅读页本就可点，不拦截）
-                if (!isFullscreen) {
-                    // 1. 左右滑动翻页：左滑下一页，右滑上一页
-                    if (abs(dx) > abs(dy) && abs(dx) > touchSlop * 3) {
-                        if (dx < 0) ReadBook.moveToNextPage() else ReadBook.moveToPrevPage()
-                        // 朗读运行中则同步到翻到的新页继续朗读
-                        if (BaseReadAloudService.isRun) {
-                            BaseReadAloudService.syncToCurrentPage()
-                        }
-                        handled = true
-                        return true
-                    }
-                    // 2. 从下往上滑动 → 开始/恢复朗读（复用"开始朗读"按钮逻辑）
-                    if (dy < -touchSlop * 3) {
-                        callBack?.onClickReadAloud()
-                        handled = true
-                        return true
-                    }
-                }
-                // 3. 从上往下滑动 → 退出（任意模式生效）
+                // 从上往下滑动 → 退出
                 if (dy > touchSlop * 3) {
                     dismiss()
                     handled = true

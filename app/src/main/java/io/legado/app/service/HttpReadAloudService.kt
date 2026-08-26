@@ -438,9 +438,10 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
         exoPlayer.clearMediaItems()
         downloadTask?.cancel()
         downloadTask = execute {
+            ensureActive()
+            val httpTts = ReadAloud.httpTTS ?: throw NoStackTraceException("tts is null")
             downloadTaskActiveLock.withLock {
                 ensureActive()
-                val httpTts = ReadAloud.httpTTS ?: throw NoStackTraceException("tts is null")
                 val endIndex = if (singleParagraphMode) (nowSpeak + 1).coerceAtMost(contentList.size) else contentList.size
                 contentList.forEachIndexed { index, contentText ->
                     ensureActive()
@@ -618,8 +619,9 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                         }
                     }
                 }
-                preDownloadAudios(httpTts)
             }
+            // 预下载移到锁外执行，避免 @js: 引擎 evalJS 阻塞导致翻页/切章时新任务等待锁释放
+            preDownloadAudios(httpTts)
         }.onError { e ->
             AppLog.put("朗读下载出错\n${e.localizedMessage}", e, true)
         }
@@ -718,15 +720,16 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
         exoPlayer.clearMediaItems()
         downloadTask?.cancel()
         downloadTask = execute {
+            ensureActive()
+            val httpTts = ReadAloud.httpTTS ?: throw NoStackTraceException("tts is null")
+            val downloaderChannel = Channel<Downloader>(Channel.UNLIMITED)
+            launch {
+                for (downloader in downloaderChannel) {
+                    kotlin.runCatching { downloader.download(null) }
+                }
+            }
             downloadTaskActiveLock.withLock {
                 ensureActive()
-                val httpTts = ReadAloud.httpTTS ?: throw NoStackTraceException("tts is null")
-                val downloaderChannel = Channel<Downloader>(Channel.UNLIMITED)
-                launch {
-                    for (downloader in downloaderChannel) {
-                        kotlin.runCatching { downloader.download(null) }
-                    }
-                }
                 val endIndex = if (singleParagraphMode) (nowSpeak + 1).coerceAtMost(contentList.size) else contentList.size
                 contentList.forEachIndexed { index, contentText ->
                     ensureActive()
@@ -881,8 +884,10 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                         }
                     }
                 }
-                preDownloadAudiosStream(httpTts, downloaderChannel)
             }
+            // 预下载移到锁外执行，避免 @js: 引擎 evalJS 阻塞导致翻页/切章时新任务等待锁释放
+            preDownloadAudiosStream(httpTts, downloaderChannel)
+            downloaderChannel.close()
         }.onError { e ->
             AppLog.put("朗读下载出错\n${e.localizedMessage}", e, true)
         }

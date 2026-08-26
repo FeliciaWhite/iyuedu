@@ -102,7 +102,7 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
 
     private fun initViews() {
         binding.spinnerGender.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("男", "女"))
-        binding.spinnerAge.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("童", "少年", "青年", "中年", "老年"))
+        binding.spinnerAge.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("童", "少年", "青年", "中年", "老年", "男主", "女主"))
         binding.btnGenerateTag.setOnClickListener { generateTimbreTag() }
         binding.ivTagSearch.setOnClickListener { showTagSearchDialog() }
         binding.btnPreview.setOnClickListener { previewConfig() }
@@ -466,9 +466,10 @@ class TtsConfigEditorActivity : BaseActivity<ActivityTtsConfigEditorBinding>() {
         val gender = binding.spinnerGender.selectedItem?.toString() ?: "男"
         val age = binding.spinnerAge.selectedItem?.toString() ?: "青年"
         val number = binding.etTagNumber.text.toString().trim().ifBlank { "01" }.padStart(2, '0')
-        // 旧格式: 男青年01、少女01、男童01 等
-        // 少年=男性，少女=女性，不需要性别前缀
+        // 男主/女主直接生成对应标签，忽略性别维度
         val tag = when (age) {
+            "男主" -> "男主$number"
+            "女主" -> "女主$number"
             "少年" -> if (gender == "女") "少女$number" else "少年$number"
             else -> "$gender$age$number"
         }

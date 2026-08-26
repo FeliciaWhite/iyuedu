@@ -502,9 +502,17 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                         runCatching {
                             when (val speakResult = getSpeakStreamResult(httpTts, speakText)) {
                                 is TtsSpeakResult.MultiSegment -> {
-                                    if (AppConfig.convertCacheToWav || speakResult.forceConvertToWav) {
-                                        // 统一解码、重采样为 24000Hz WAV
-                                        val wavBytes = io.legado.app.utils.AudioDecodeUtil.mergeSegmentsToWav(speakResult.segments, postParams = speakResult.postAudioParams)
+                                    val needSilenceSkip = io.legado.app.help.config.AppConfig.ttsSilenceSkipEnabled
+                                    if (AppConfig.convertCacheToWav || speakResult.forceConvertToWav || needSilenceSkip) {
+                                        // 统一解码、重采样为 24000Hz WAV，每段合成后立即去除空音频（快节奏）
+                                        val wavBytes = io.legado.app.utils.AudioDecodeUtil.mergeSegmentsToWav(
+                                            speakResult.segments,
+                                            postParams = speakResult.postAudioParams,
+                                            silenceSkip = io.legado.app.utils.AudioDecodeUtil.SilenceSkipConfig(
+                                                enabled = needSilenceSkip,
+                                                minDurationMs = io.legado.app.help.config.AppConfig.ttsSilenceSkipMinMs,
+                                            )
+                                        )
                                         if (wavBytes != null) {
                                             createSpeakFile(fileName, ByteArrayInputStream(wavBytes))
                                             val file = getSpeakFileAsMd5(fileName)
@@ -518,7 +526,6 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                                                 }
                                             }
                                         } else {
-                                            AppLog.put("缓存转 WAV 失败，回退到原始方式: $fileName")
                                             fallbackSaveMultiSegment(fileName, speakResult, index)
                                         }
                                     } else {
@@ -526,13 +533,21 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                                     }
                                 }
                                 is TtsSpeakResult.Single -> {
-                                    if (AppConfig.convertCacheToWav || speakResult.forceConvertToWav) {
+                                    // 快节奏播放开启时，也需走解码裁剪流程（即使未开转 WAV 缓存）
+                                    val needSilenceSkip = io.legado.app.help.config.AppConfig.ttsSilenceSkipEnabled
+                                    if (AppConfig.convertCacheToWav || speakResult.forceConvertToWav || needSilenceSkip) {
                                         val bytes = speakResult.stream.readBytes()
-                                        val wavBytes = io.legado.app.utils.AudioDecodeUtil.decodeToStandardWav(bytes, postParams = speakResult.postAudioParams)
+                                        val wavBytes = io.legado.app.utils.AudioDecodeUtil.decodeToStandardWav(
+                                            bytes,
+                                            postParams = speakResult.postAudioParams,
+                                            silenceSkip = io.legado.app.utils.AudioDecodeUtil.SilenceSkipConfig(
+                                                enabled = needSilenceSkip,
+                                                minDurationMs = io.legado.app.help.config.AppConfig.ttsSilenceSkipMinMs,
+                                            )
+                                        )
                                         if (wavBytes != null) {
                                             createSpeakFile(fileName, ByteArrayInputStream(wavBytes))
                                         } else {
-                                            AppLog.put("缓存转 WAV 失败，回退到原始方式: $fileName")
                                             createSpeakFile(fileName, ByteArrayInputStream(bytes))
                                         }
                                     } else {
@@ -638,12 +653,19 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                         runCatching {
                             when (val speakResult = getSpeakStreamResult(httpTts, speakText)) {
                                 is TtsSpeakResult.MultiSegment -> {
-                                    if (AppConfig.convertCacheToWav || speakResult.forceConvertToWav) {
-                                        val wavBytes = io.legado.app.utils.AudioDecodeUtil.mergeSegmentsToWav(speakResult.segments, postParams = speakResult.postAudioParams)
+                                    val needSilenceSkip = io.legado.app.help.config.AppConfig.ttsSilenceSkipEnabled
+                                    if (AppConfig.convertCacheToWav || speakResult.forceConvertToWav || needSilenceSkip) {
+                                        val wavBytes = io.legado.app.utils.AudioDecodeUtil.mergeSegmentsToWav(
+                                            speakResult.segments,
+                                            postParams = speakResult.postAudioParams,
+                                            silenceSkip = io.legado.app.utils.AudioDecodeUtil.SilenceSkipConfig(
+                                                enabled = needSilenceSkip,
+                                                minDurationMs = io.legado.app.help.config.AppConfig.ttsSilenceSkipMinMs,
+                                            )
+                                        )
                                         if (wavBytes != null) {
                                             createSpeakFile(fileName, ByteArrayInputStream(wavBytes))
                                         } else {
-                                            AppLog.put("预载转 WAV 失败: $fileName")
                                             val out = java.io.ByteArrayOutputStream()
                                             speakResult.segments.forEach { out.write(it) }
                                             createSpeakFile(fileName, ByteArrayInputStream(out.toByteArray()))
@@ -655,13 +677,21 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                                     }
                                 }
                                 is TtsSpeakResult.Single -> {
-                                    if (AppConfig.convertCacheToWav || speakResult.forceConvertToWav) {
+                                    // 快节奏播放开启时，也需走解码裁剪流程（即使未开转 WAV 缓存）
+                                    val needSilenceSkip = io.legado.app.help.config.AppConfig.ttsSilenceSkipEnabled
+                                    if (AppConfig.convertCacheToWav || speakResult.forceConvertToWav || needSilenceSkip) {
                                         val bytes = speakResult.stream.readBytes()
-                                        val wavBytes = io.legado.app.utils.AudioDecodeUtil.decodeToStandardWav(bytes, postParams = speakResult.postAudioParams)
+                                        val wavBytes = io.legado.app.utils.AudioDecodeUtil.decodeToStandardWav(
+                                            bytes,
+                                            postParams = speakResult.postAudioParams,
+                                            silenceSkip = io.legado.app.utils.AudioDecodeUtil.SilenceSkipConfig(
+                                                enabled = needSilenceSkip,
+                                                minDurationMs = io.legado.app.help.config.AppConfig.ttsSilenceSkipMinMs,
+                                            )
+                                        )
                                         if (wavBytes != null) {
                                             createSpeakFile(fileName, ByteArrayInputStream(wavBytes))
                                         } else {
-                                            AppLog.put("预载转 WAV 失败: $fileName")
                                             createSpeakFile(fileName, ByteArrayInputStream(bytes))
                                         }
                                     } else {
@@ -734,8 +764,16 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                         runCatching {
                             when (val speakResult = getSpeakStreamResult(httpTts, speakText)) {
                                 is TtsSpeakResult.MultiSegment -> {
-                                    if (AppConfig.convertCacheToWav || speakResult.forceConvertToWav) {
-                                        val wavBytes = io.legado.app.utils.AudioDecodeUtil.mergeSegmentsToWav(speakResult.segments, postParams = speakResult.postAudioParams)
+                                    val needSilenceSkip = io.legado.app.help.config.AppConfig.ttsSilenceSkipEnabled
+                                    if (AppConfig.convertCacheToWav || speakResult.forceConvertToWav || needSilenceSkip) {
+                                        val wavBytes = io.legado.app.utils.AudioDecodeUtil.mergeSegmentsToWav(
+                                            speakResult.segments,
+                                            postParams = speakResult.postAudioParams,
+                                            silenceSkip = io.legado.app.utils.AudioDecodeUtil.SilenceSkipConfig(
+                                                enabled = needSilenceSkip,
+                                                minDurationMs = io.legado.app.help.config.AppConfig.ttsSilenceSkipMinMs,
+                                            )
+                                        )
                                         if (wavBytes != null) {
                                             createSpeakFile(fileName, ByteArrayInputStream(wavBytes))
                                             val file = getSpeakFileAsMd5(fileName)
@@ -749,7 +787,6 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                                                 }
                                             }
                                         } else {
-                                            AppLog.put("stream 缓存转 WAV 失败，回退: $fileName")
                                             fallbackSaveMultiSegment(fileName, speakResult, index)
                                         }
                                     } else {
@@ -757,9 +794,18 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                                     }
                                 }
                                 is TtsSpeakResult.Single -> {
-                                    if (speakResult.forceConvertToWav) {
+                                    // 快节奏播放开启时，也需走解码裁剪流程（即使未开转 WAV 缓存）
+                                    val needSilenceSkip = io.legado.app.help.config.AppConfig.ttsSilenceSkipEnabled
+                                    if (speakResult.forceConvertToWav || needSilenceSkip) {
                                         val bytes = speakResult.stream.readBytes()
-                                        val wavBytes = io.legado.app.utils.AudioDecodeUtil.decodeToStandardWav(bytes, postParams = speakResult.postAudioParams)
+                                        val wavBytes = io.legado.app.utils.AudioDecodeUtil.decodeToStandardWav(
+                                            bytes,
+                                            postParams = speakResult.postAudioParams,
+                                            silenceSkip = io.legado.app.utils.AudioDecodeUtil.SilenceSkipConfig(
+                                                enabled = needSilenceSkip,
+                                                minDurationMs = io.legado.app.help.config.AppConfig.ttsSilenceSkipMinMs,
+                                            )
+                                        )
                                         if (wavBytes != null) {
                                             createSpeakFile(fileName, ByteArrayInputStream(wavBytes))
                                         } else {
@@ -868,12 +914,19 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                     if (hasSpeakFile(fileName)) return@forEachIndexed
                     when (val speakResult = getSpeakStreamResult(httpTts, speakText)) {
                         is TtsSpeakResult.MultiSegment -> {
-                            if (AppConfig.convertCacheToWav || speakResult.forceConvertToWav) {
-                                val wavBytes = io.legado.app.utils.AudioDecodeUtil.mergeSegmentsToWav(speakResult.segments, postParams = speakResult.postAudioParams)
+                            val needSilenceSkip = io.legado.app.help.config.AppConfig.ttsSilenceSkipEnabled
+                            if (AppConfig.convertCacheToWav || speakResult.forceConvertToWav || needSilenceSkip) {
+                                val wavBytes = io.legado.app.utils.AudioDecodeUtil.mergeSegmentsToWav(
+                                    speakResult.segments,
+                                    postParams = speakResult.postAudioParams,
+                                    silenceSkip = io.legado.app.utils.AudioDecodeUtil.SilenceSkipConfig(
+                                        enabled = needSilenceSkip,
+                                        minDurationMs = io.legado.app.help.config.AppConfig.ttsSilenceSkipMinMs,
+                                    )
+                                )
                                 if (wavBytes != null) {
                                     createSpeakFile(fileName, ByteArrayInputStream(wavBytes))
                                 } else {
-                                    AppLog.put("stream 预载转 WAV 失败: $fileName")
                                     val out = java.io.ByteArrayOutputStream()
                                     speakResult.segments.forEach { out.write(it) }
                                     createSpeakFile(fileName, ByteArrayInputStream(out.toByteArray()))

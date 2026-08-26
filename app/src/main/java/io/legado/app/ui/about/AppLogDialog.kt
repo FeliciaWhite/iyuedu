@@ -1,10 +1,13 @@
 package io.legado.app.ui.about
 
 import android.content.Context
+import android.content.Context.CLIPBOARD_SERVICE
 import android.os.Bundle
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.content.ClipboardManager
+import android.content.ClipData
 import androidx.appcompat.widget.Toolbar
 import androidx.recyclerview.widget.LinearLayoutManager
 import io.legado.app.R
@@ -18,6 +21,7 @@ import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.setLayout
+import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import splitties.views.onClick
@@ -53,6 +57,16 @@ class AppLogDialog : BaseDialogFragment(R.layout.dialog_recycler_view),
             R.id.menu_clear -> {
                 AppLog.clear()
                 adapter.clearItems()
+            }
+
+            R.id.menu_copy -> {
+                val text = AppLog.logs.joinToString("\n") {
+                    "${LogUtils.logTimeFormat.format(java.util.Date(it.first))} ${it.second}"
+                }
+                val clipboard =
+                    requireContext().getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("AppLog", text))
+                requireContext().toastOnUi(getString(R.string.copy_success))
             }
         }
         return true

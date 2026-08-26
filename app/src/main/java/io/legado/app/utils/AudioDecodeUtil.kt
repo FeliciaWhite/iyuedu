@@ -3,14 +3,19 @@ package io.legado.app.utils
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
-import android.util.Log
-import io.legado.app.constant.AppLog
+import androidx.media3.common.C
+import androidx.media3.common.audio.AudioProcessingPipeline
+import androidx.media3.common.audio.AudioProcessor
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.audio.SilenceSkippingAudioProcessor
+import com.google.common.collect.ImmutableList
 import io.legado.app.help.audio.Sonic
 import io.legado.app.help.audiobook.PostAudioParams
 import io.legado.app.help.config.AppConfig
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 /**
  * 音频解码与重采样工具。
@@ -25,32 +30,47 @@ object AudioDecodeUtil {
     private const val TARGET_BITS = 16
 
     /**
+     * 快节奏播放（去除静音）参数。
+     * 对齐 tts_server_android 的 SynthesizerConfig.silenceSkip*：
+     * 在合成阶段、PCM 域用 SilenceSkippingAudioProcessor 裁剪静音段。
+     *
+     * @param enabled 是否启用
+     * @param minDurationMs 最小静音时长（毫秒），低于该时长的停顿不处理，有效范围 150~2000
+     */
+    data class SilenceSkipConfig(
+        val enabled: Boolean,
+        val minDurationMs: Int,
+    )
+
+    /**
      * 将任意格式的音频 ByteArray 解码并重采样为标准 WAV PCM。
      *
      * @param audioData 原始音频字节数据
+     * @param gain 音量增益，1.0 为原始音量
+     * @param postParams 变速变调参数，为 null 时不做变速变调处理
+     * @param silenceSkip 快节奏播放（去除静音）参数，不为 null 且 enabled 时在 PCM 域裁剪静音
      * @return 标准 WAV 文件的 ByteArray，失败返回 null
      */
-    fun decodeToStandardWav(audioData: ByteArray, gain: Float = 1.0f, postParams: PostAudioParams? = null): ByteArray? {
+    fun decodeToStandardWav(
+        audioData: ByteArray,
+        gain: Float = 1.0f,
+        postParams: PostAudioParams? = null,
+        silenceSkip: SilenceSkipConfig? = null,
+    ): ByteArray? {
         if (audioData.isEmpty()) {
-            AppLog.put("$TAG 输入音频数据为空")
-            Log.d(TAG, "输入音频数据为空")
             return null
         }
 
         // 先检测是否为 WAV 格式
-        val head = audioData.copyOfRange(0, audioData.size.coerceAtMost(16))
         val isWav = audioData.size >= 12 &&
                 String(audioData.copyOfRange(0, 4)) == "RIFF" &&
                 String(audioData.copyOfRange(8, 12)) == "WAVE"
-        Log.d(TAG, "decodeToStandardWav 输入大小=${audioData.size}, 是WAV=$isWav, 头16字节=${head.joinToString(" ") { "%02X".format(it) }}")
 
         return try {
             var pcmResult: Triple<ByteArray, Int, Int>? = null
             if (isWav) {
                 pcmResult = extractWavPcm(audioData)
                 if (pcmResult == null) {
-                    AppLog.put("$TAG WAV 解析失败，尝试 MediaCodec 解码")
-                    Log.d(TAG, "WAV 解析失败，尝试 MediaCodec 解码")
                     pcmResult = decodeViaMediaCodec(audioData)
                 }
             } else {
@@ -58,21 +78,15 @@ object AudioDecodeUtil {
             }
 
             if (pcmResult == null) {
-                AppLog.put("$TAG 解码失败，无法获取 PCM 数据")
-                Log.e(TAG, "解码失败，无法获取 PCM 数据")
                 return null
             }
 
             val (pcm, srcRate, srcChannels) = pcmResult
-            AppLog.put("$TAG 解码成功: 采样率=${srcRate}Hz, 声道数=$srcChannels, PCM大小=${pcm.size}")
-            Log.d(TAG, "解码成功: 采样率=${srcRate}Hz, 声道数=$srcChannels, PCM大小=${pcm.size}")
 
             // 重采样到目标参数
             val resampled = if (srcRate == TARGET_SAMPLE_RATE && srcChannels == TARGET_CHANNELS) {
                 pcm
             } else {
-                AppLog.put("$TAG 需要重采样: $srcRate/$srcChannels -> $TARGET_SAMPLE_RATE/$TARGET_CHANNELS")
-                Log.d(TAG, "需要重采样: $srcRate/$srcChannels -> $TARGET_SAMPLE_RATE/$TARGET_CHANNELS")
                 resamplePcm(pcm, srcRate, TARGET_SAMPLE_RATE, srcChannels, TARGET_CHANNELS)
             }
 
@@ -83,12 +97,17 @@ object AudioDecodeUtil {
                 resampled
             }
 
+            // 快节奏播放：在 PCM 域裁剪静音段（对齐 tts_server_android 的 DefaultResultProcessor 流程）
+            val skipped = if (silenceSkip != null && silenceSkip.enabled) {
+                applySilenceSkip(processed, TARGET_SAMPLE_RATE, silenceSkip.minDurationMs)
+            } else {
+                processed
+            }
+
             val gain = AppConfig.convertCacheToWavGain
-            val amplified = if (gain != 1.0f) applyVolumeGain(processed, gain) else processed
+            val amplified = if (gain != 1.0f) applyVolumeGain(skipped, gain) else skipped
             writeWavHeaderAndData(amplified, TARGET_SAMPLE_RATE, TARGET_CHANNELS, TARGET_BITS)
         } catch (e: Exception) {
-            AppLog.put("$TAG 解码并重采样失败: ${e.message}", e)
-            Log.e(TAG, "解码并重采样失败", e)
             null
         }
     }
@@ -96,49 +115,36 @@ object AudioDecodeUtil {
     /**
      * 将多段音频统一解码、重采样后合并为一个 WAV 文件。
      */
-    fun mergeSegmentsToWav(segments: List<ByteArray>, gain: Float = 1.0f, postParams: PostAudioParams? = null): ByteArray? {
+    fun mergeSegmentsToWav(
+        segments: List<ByteArray>,
+        gain: Float = 1.0f,
+        postParams: PostAudioParams? = null,
+        silenceSkip: SilenceSkipConfig? = null,
+    ): ByteArray? {
         if (segments.isEmpty()) {
-            AppLog.put("$TAG mergeSegmentsToWav 输入为空")
-            Log.d(TAG, "mergeSegmentsToWav 输入为空")
             return null
         }
 
-        AppLog.put("$TAG 开始合并 ${segments.size} 段音频")
-        Log.d(TAG, "开始合并 ${segments.size} 段音频")
         val allPcm = mutableListOf<ByteArray>()
         try {
             segments.forEachIndexed { index, segment ->
-                AppLog.put("$TAG 处理第 $index 段, 大小=${segment.size}")
-                Log.d(TAG, "处理第 $index 段, 大小=${segment.size}")
-                val wavBytes = decodeToStandardWav(segment)
+                // 每一段合成后立即去除空音频（快节奏），所有处理在合并之前完成
+                val wavBytes = decodeToStandardWav(segment, silenceSkip = silenceSkip)
                 if (wavBytes == null) {
-                    AppLog.put("$TAG 第 $index 段解码失败，跳过")
-                    Log.e(TAG, "第 $index 段解码失败，跳过")
                     return@forEachIndexed
                 }
-                AppLog.put("$TAG 第 $index 段解码成功, WAV大小=${wavBytes.size}")
-                Log.d(TAG, "第 $index 段解码成功, WAV大小=${wavBytes.size}")
                 // 去掉 WAV 头，取 PCM 数据
                 val pcm = extractPcmFromWav(wavBytes)
                 if (pcm != null) {
-                    AppLog.put("$TAG 第 $index 段提取PCM成功, PCM大小=${pcm.size}")
-                    Log.d(TAG, "第 $index 段提取PCM成功, PCM大小=${pcm.size}")
                     allPcm.add(pcm)
-                } else {
-                    AppLog.put("$TAG 第 $index 段提取PCM失败")
-                    Log.e(TAG, "第 $index 段提取PCM失败")
                 }
             }
 
             if (allPcm.isEmpty()) {
-                AppLog.put("$TAG 所有段解码/提取均失败")
-                Log.e(TAG, "所有段解码/提取均失败")
                 return null
             }
 
             val totalSize = allPcm.sumOf { it.size }
-            AppLog.put("$TAG 合并PCM: 共 ${allPcm.size} 段, 总大小=$totalSize")
-            Log.d(TAG, "合并PCM: 共 ${allPcm.size} 段, 总大小=$totalSize")
             val mergedPcm = ByteArray(totalSize)
             var offset = 0
             allPcm.forEach {
@@ -157,8 +163,6 @@ object AudioDecodeUtil {
             val amplified = if (gain != 1.0f) applyVolumeGain(processed, gain) else processed
             return writeWavHeaderAndData(amplified, TARGET_SAMPLE_RATE, TARGET_CHANNELS, TARGET_BITS)
         } catch (e: Exception) {
-            AppLog.put("$TAG 合并段失败: ${e.message}", e)
-            Log.e(TAG, "合并段失败", e)
             return null
         }
     }
@@ -234,6 +238,72 @@ object AudioDecodeUtil {
         return result
     }
 
+    /**
+     * 在 PCM 域裁剪静音段，实现「快节奏播放」（去除静音）。
+     * 原样复刻 tts_server_android 的 DefaultResultProcessor：
+     * 用 AudioProcessingPipeline 驱动 SilenceSkippingAudioProcessor，
+     * 参数只透传最小静音时长，其余全部用 Media3 默认值，不擅自调整。
+     *
+     * @param pcm 16bit 小端 PCM，单声道
+     * @param sampleRate 真实采样率（此处已统一为 TARGET_SAMPLE_RATE）
+     * @param minDurationMs 最小静音时长（毫秒），对应原版 silenceSkipMinDurationMs
+     * @return 裁剪后的 PCM（仍为 16bit 小端、单声道）
+     */
+    @OptIn(UnstableApi::class)
+    private fun applySilenceSkip(pcm: ByteArray, sampleRate: Int, minDurationMs: Int): ByteArray {
+        if (pcm.isEmpty()) return pcm
+        try {
+            // 仅调整最小静音时长，其余参数保持 Media3 默认值（原样复刻）
+            val skipProcessor = SilenceSkippingAudioProcessor(
+                minDurationMs * 1000L,
+                SilenceSkippingAudioProcessor.DEFAULT_SILENCE_RETENTION_RATIO,
+                SilenceSkippingAudioProcessor.DEFAULT_MAX_SILENCE_TO_KEEP_DURATION_US,
+                SilenceSkippingAudioProcessor.DEFAULT_MIN_VOLUME_TO_KEEP_PERCENTAGE,
+                SilenceSkippingAudioProcessor.DEFAULT_SILENCE_THRESHOLD_LEVEL,
+            )
+            skipProcessor.setEnabled(true)
+
+            val pipelines = ImmutableList.of<AudioProcessor>(skipProcessor)
+            val pipeline = AudioProcessingPipeline(pipelines)
+            pipeline.configure(
+                AudioProcessor.AudioFormat(
+                    sampleRate,
+                    TARGET_CHANNELS,
+                    C.ENCODING_PCM_16BIT,
+                )
+            )
+            pipeline.flush()
+
+            val out = ByteArrayOutputStream(pcm.size)
+            val input = ByteBuffer.wrap(pcm).order(ByteOrder.LITTLE_ENDIAN)
+            // 分批喂入并取输出（原版写法）
+            while (input.hasRemaining()) {
+                pipeline.queueInput(input)
+                pipeline.output?.let { buf ->
+                    val len = buf.remaining()
+                    if (len > 0) {
+                        val arr = ByteArray(len)
+                        buf.get(arr)
+                        out.write(arr)
+                    }
+                }
+            }
+            // 结束流并取剩余输出
+            pipeline.queueEndOfStream()
+            pipeline.output?.let { buf ->
+                val len = buf.remaining()
+                if (len > 0) {
+                    val arr = ByteArray(len)
+                    buf.get(arr)
+                    out.write(arr)
+                }
+            }
+            return out.toByteArray()
+        } catch (e: Exception) {
+            return pcm
+        }
+    }
+
     /** 从 WAV ByteArray 中提取 PCM 数据 */
     private fun extractWavPcm(data: ByteArray): Triple<ByteArray, Int, Int>? {
         return try {
@@ -276,16 +346,12 @@ object AudioDecodeUtil {
             }
 
             if (sampleRate == 0 || dataSize == 0 || dataOffset == 0) {
-                AppLog.put("$TAG WAV 解析失败: fmt/data chunk 缺失")
-                Log.d(TAG, "WAV 解析失败: fmt/data chunk 缺失")
                 return null
             }
 
             // dataSize 可能大于实际数据（某些 WAV 生成工具声明值偏大），取实际可用大小
             val actualSize = dataSize.coerceAtMost(data.size - dataOffset)
             if (actualSize <= 0) {
-                AppLog.put("$TAG WAV 解析失败: data chunk 无实际数据")
-                Log.d(TAG, "WAV 解析失败: data chunk 无实际数据")
                 return null
             }
 
@@ -298,7 +364,6 @@ object AudioDecodeUtil {
                 val guidLo = readUint32Le(data, 12 + 8 + 24) // fmt chunk 内偏移 24
                 effectiveFormat = guidLo
                 isFloat = (guidLo == 3)
-                Log.d(TAG, "检测到 WAVEFORMATEXTENSIBLE, SubFormat GUID 低4字节=$guidLo, 按 ${if (isFloat) "float" else "PCM"} 处理")
             } else {
                 effectiveFormat = audioFormat
                 isFloat = audioFormat == 3
@@ -306,8 +371,6 @@ object AudioDecodeUtil {
 
             // 支持 PCM (1)、float (3)、EXTENSIBLE(底层为PCM/float)；其他回退到 MediaCodec
             if (effectiveFormat != 1 && effectiveFormat != 3) {
-                AppLog.put("$TAG WAV 格式码不支持: effective=$effectiveFormat (original=$audioFormat)，回退到 MediaCodec")
-                Log.d(TAG, "WAV 格式码不支持: effective=$effectiveFormat (original=$audioFormat)")
                 return null
             }
 
@@ -360,18 +423,12 @@ object AudioDecodeUtil {
                     pcm16
                 }
                 else -> {
-                    AppLog.put("$TAG 不支持的 WAV 位深: $bitsPerSample, 回退到 MediaCodec")
-                    Log.d(TAG, "不支持的 WAV 位深: $bitsPerSample")
                     return null
                 }
             }
 
-            AppLog.put("$TAG WAV 解析成功: ${sampleRate}Hz, $numChannels ch, $bitsPerSample bit, PCM=${pcmData.size}")
-            Log.d(TAG, "WAV 解析成功: ${sampleRate}Hz, $numChannels ch, $bitsPerSample bit, PCM=${pcmData.size}")
             Triple(pcmData, sampleRate, numChannels)
         } catch (e: Exception) {
-            AppLog.put("$TAG extractWavPcm 异常: ${e.message}", e)
-            Log.e(TAG, "extractWavPcm 异常", e)
             null
         }
     }
@@ -431,8 +488,6 @@ object AudioDecodeUtil {
 
                 // 【关键修复】PCM / WAV (audio/raw) 不需要 MediaCodec 解码，直接读取
                 if (mime.startsWith("audio/raw") || mime.contains("wav")) {
-                    AppLog.put("$TAG 检测到 RAW PCM，直接提取: $mime, ${sampleRate}Hz, $channels ch")
-                    Log.d(TAG, "MediaExtractor MIME=$mime, 直接提取 PCM")
                     val pcmChunks = mutableListOf<ByteArray>()
                     val buf = ByteArray(1024 * 1024)
                     val bb = ByteBuffer.wrap(buf)
@@ -517,7 +572,6 @@ object AudioDecodeUtil {
                 return Triple(pcm, sampleRate, channels)
             }
         } catch (e: Exception) {
-            AppLog.put("$TAG MediaCodec 解码异常: ${e.message}", e)
         } finally {
             extractor.release()
         }

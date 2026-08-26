@@ -1657,7 +1657,7 @@ object JReadVoiceEngine {
                         "plugin=${plugin.name.ifBlank { plugin.pluginId.ifBlank { plugin.id } }} voice=${config.voice}"
                 )
             }
-            file.writeBytes(bytes)
+            file.writeBytes(applySilenceSkipIfEnabled(bytes))
             return
         }
 
@@ -1694,8 +1694,27 @@ object JReadVoiceEngine {
                     "J阅读声音请求返回异常小音频: bytes=${audioBytes.size} textLen=${text.length}"
                 )
             }
-            file.writeBytes(audioBytes)
+            file.writeBytes(applySilenceSkipIfEnabled(audioBytes))
         }
+    }
+
+    /**
+     * 若开启「快节奏播放」则对音频做静音裁剪，否则原样返回。
+     * 复用 io.legado.app.utils.AudioDecodeUtil.decodeToStandardWav（解码→重采样24000→Sonic→静音裁剪→封装WAV），
+     * 静音裁剪步骤对齐 tts_server_android 的 DefaultResultProcessor PCM 流程。
+     */
+    private fun applySilenceSkipIfEnabled(bytes: ByteArray): ByteArray {
+        if (!io.legado.app.help.config.AppConfig.ttsSilenceSkipEnabled) {
+            return bytes
+        }
+        val out = io.legado.app.utils.AudioDecodeUtil.decodeToStandardWav(
+            bytes,
+            silenceSkip = io.legado.app.utils.AudioDecodeUtil.SilenceSkipConfig(
+                enabled = true,
+                minDurationMs = io.legado.app.help.config.AppConfig.ttsSilenceSkipMinMs,
+            )
+        )
+        return out ?: bytes
     }
 
     private fun isClearlyInvalidPluginAudio(text: String, bytes: ByteArray): Boolean {

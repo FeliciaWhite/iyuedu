@@ -936,6 +936,16 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             ?.toFloatOrNull()?.coerceIn(0.1f, 3f) ?: 1.0f
         set(value) = appCtx.putPrefString(PreferKey.ttsPostPitch, value.toString())
 
+    // 快节奏播放（去除静音）：合成阶段 PCM 裁剪，默认关闭，最小静音时长默认 200ms
+    var ttsSilenceSkipEnabled: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.ttsSilenceSkipEnabled, false)
+        set(value) = appCtx.putPrefBoolean(PreferKey.ttsSilenceSkipEnabled, value)
+
+    var ttsSilenceSkipMinMs: Int
+        get() = appCtx.getPrefInt(PreferKey.ttsSilenceSkipMinMs, 200)
+            .coerceIn(150, 2000)
+        set(value) = appCtx.putPrefInt(PreferKey.ttsSilenceSkipMinMs, value.coerceIn(150, 2000))
+
     // 朗读播放时的音量增益倍数（默认 1.0，范围 0.5~5.0，超过自动截断为 5.0）
     var readAloudVolumeGain: Float
         get() = appCtx.getPrefString(PreferKey.readAloudVolumeGain, "1.0")

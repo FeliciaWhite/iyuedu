@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.Menu
+import android.widget.Switch
 import android.view.MenuItem
 import android.view.View
 import android.widget.EditText
@@ -332,6 +333,7 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                 else alert("可用标签 (${tags.size})") { setMessage(tags.joinToString("\n")); okButton() }
             }
             R.id.menu_global_audio_params -> showGlobalAudioParamsDialog()
+            R.id.menu_fast_play -> showFastPlayDialog()
             R.id.menu_help -> showHelp("ttsPluginHelp")
         }
         return super.onCompatOptionsItemSelected(item)
@@ -994,6 +996,60 @@ class TtsPluginActivity : BaseActivity<ActivityTtsPluginBinding>() {
                 AppConfig.ttsPostVolume = sbVol.progress / 100f
                 AppConfig.ttsPostPitch = sbPitch.progress / 100f
                 toastOnUi("已更新全局音频调节")
+            }
+            cancelButton()
+        }.show()
+    }
+
+    /**
+     * 快节奏播放（去除静音）全局设置弹窗。
+     * 复刻 tts_server_android 的 SilenceSkipAudioDialog：
+     * 总开关 + 最小静音时长（毫秒，范围 150~2000，默认 200）。
+     */
+    private fun showFastPlayDialog() {
+        val enabled = AppConfig.ttsSilenceSkipEnabled
+        val minMs = AppConfig.ttsSilenceSkipMinMs
+
+        // 总开关行
+        val switchRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(48, 16, 48, 8)
+            gravity = android.view.Gravity.CENTER_VERTICAL
+        }
+        val switchText = TextView(this).apply {
+            text = "启用快节奏播放（去除静音）"
+            textSize = 15f
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val switch = android.widget.Switch(this).apply { isChecked = enabled }
+        switchRow.addView(switchText)
+        switchRow.addView(switch)
+
+        // 最小静音时长输入
+        val etMin = EditText(this).apply {
+            setText(minMs.toString())
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            hint = "最小静音时长 (毫秒)"
+            setPadding(48, 8, 48, 8)
+        }
+
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(switchRow)
+            addView(TextView(this@TtsPluginActivity).apply {
+                text = "低于该时长的停顿不处理（范围 150~2000 毫秒）"
+                textSize = 12f; setPadding(48, 0, 48, 8)
+            })
+            addView(etMin)
+        }
+
+        alert("快节奏播放") {
+            customView { container }
+            okButton {
+                val parsed = etMin.text.toString().toIntOrNull() ?: minMs
+                AppConfig.ttsSilenceSkipEnabled = switch.isChecked
+                AppConfig.ttsSilenceSkipMinMs = parsed.coerceIn(150, 2000)
+                toastOnUi("已更新快节奏播放设置")
             }
             cancelButton()
         }.show()

@@ -294,6 +294,10 @@ object PreferKey {
     const val ttsPostVolume = "ttsPostVolume"
     const val ttsPostPitch = "ttsPostPitch"
 
+    // TTS 快节奏播放（去除静音，合成阶段 PCM 裁剪）
+    const val ttsSilenceSkipEnabled = "ttsSilenceSkipEnabled"
+    const val ttsSilenceSkipMinMs = "ttsSilenceSkipMinMs"
+
     // --- AI 生图配置 ---
     const val readAloudAiImage = "readAloudAiImage"
     // 启用AI生图（每本书单独设置），key = aiImageEnablePrefix_${bookUrl}
